@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Models (fichiers lourds)
+server/models/*.gguf
+server/models/*.bin
+server/models/piper/
+
+# Tauri build
+client/src-tauri/target/
+client/node_modules/
+client/dist/
+
+# Logs
+.logs/
+*.log
+
+# Secrets
+.env
+.env.local
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# PyInstaller
+server/dist/
+server/build/
+server/*.spec
+
+# IDE
+.idea/
+.vscode/
+*.suo
+*.user
