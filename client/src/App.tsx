@@ -1,51 +1,75 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { VoiceVisualizer } from "./components/VoiceVisualizer/VoiceVisualizer";
+import { ChatPanel } from "./components/ChatPanel/ChatPanel";
+import { StatusBar } from "./components/StatusBar/StatusBar";
+import { CommandInput } from "./components/CommandInput/CommandInput";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
-
+function HexGrid() {
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+    <svg
+      className="absolute inset-0 w-full h-full opacity-5 pointer-events-none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <pattern
+          id="hex"
+          x="0"
+          y="0"
+          width="60"
+          height="52"
+          patternUnits="userSpaceOnUse"
+        >
+          <polygon
+            points="30,2 58,17 58,46 30,61 2,46 2,17"
+            fill="none"
+            stroke="#00d4ff"
+            strokeWidth="0.5"
+          />
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#hex)" />
+    </svg>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <div className="h-screen flex flex-col relative overflow-hidden bg-[#020c18]">
+      <HexGrid />
+
+      <div className="relative z-10 text-center py-3 border-b border-cyan-900/30">
+        <h1
+          className="text-2xl font-bold tracking-[0.5em] text-cyan-400"
+          style={{
+            textShadow: "0 0 20px #00d4ff, 0 0 40px #00d4ff66",
+          }}
+        >
+          J.A.R.V.I.S.
+        </h1>
+        <p className="text-[10px] text-blue-400/40 tracking-widest mt-0.5">
+          JUST A RATHER VERY INTELLIGENT SYSTEM
+        </p>
+      </div>
+
+      <StatusBar />
+
+      <div className="flex-1 flex overflow-hidden relative z-10">
+        <div className="w-72 flex flex-col items-center justify-center border-r border-cyan-900/30 p-4 gap-4">
+          <VoiceVisualizer />
+          <div className="text-center">
+            <div className="text-xs text-blue-400/50 tracking-widest">
+              SYSTÈME ACTIF
+            </div>
+            <div className="text-xs text-cyan-400/70 mt-1">
+              RTX 3070 · CUDA 13
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 flex flex-col">
+          <ChatPanel />
+          <CommandInput />
+        </div>
+      </div>
+    </div>
+  );
+}
