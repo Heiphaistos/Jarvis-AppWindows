@@ -3,28 +3,25 @@ fastapi==0.136.3
 uvicorn[standard]==0.48.0
 websockets==16.0
 
-# AI — STT (requires numpy — deferred)
-# faster-whisper==1.1.1
+# AI — STT
+faster-whisper==1.2.1
 
-# AI — Wake Word (requires numpy — deferred)
-# openwakeword==0.6.0
+# AI — Wake Word
+openwakeword==0.6.0
 
 # System tools
 psutil==7.2.2
-# pyautogui requires Pillow (deferred)
+pyautogui==0.9.54
 
 # Data validation
 pydantic==2.13.4
 pydantic-settings==2.14.1
 
-# Audio (requires numpy — deferred)
-# sounddevice
-# numpy (Python 3.12 or earlier)
-# scipy (Python 3.12 or earlier)
+# Audio
+sounddevice==0.5.5
+numpy==2.4.6
+scipy==1.17.1
 
 # Utilities
 python-multipart==0.0.29
 aiofiles==25.1.0
-
-# Note: numpy, scipy, faster-whisper, openwakeword, sounddevice, pyautogui
-# require Python 3.12 or earlier. Install them when Python 3.13 or earlier is available.
