@@ -132,6 +132,11 @@ function enqueueTtsChunk(b64: string, final: boolean, onAllDone: () => void): vo
   }
 }
 
+function clearTtsQueue(): void {
+  _ttsQueue.length = 0;
+  _ttsPlaying = false;
+}
+
 interface JarvisState {
   status: JarvisStatus;
   messages: Message[];
@@ -169,12 +174,16 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
   llmAvailable: true,
 
   setStatus: (status) => set({ status }),
-  setConnected: (isConnected) => set({ isConnected }),
+  setConnected: (isConnected) => {
+    if (!isConnected) clearTtsQueue();
+    set({ isConnected });
+  },
   setMicActive: (isMicActive) => set({ isMicActive }),
   setTtsEnabled: (ttsEnabled) => set({ ttsEnabled }),
   setSelectedVoice: (selectedVoice) => set({ selectedVoice }),
   setWsSend: (fn) => set({ wsSend: fn }),
   clearMessages: () => {
+    clearTtsQueue();
     set({ messages: [], pendingMessageId: null });
     get().wsSend?.({ type: "clear_history", payload: {} });
   },
