@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Trash2 } from "lucide-react";
+import { Trash2, Volume2, VolumeX } from "lucide-react";
 import { VoiceVisualizer } from "./components/VoiceVisualizer/VoiceVisualizer";
 import { ChatPanel } from "./components/ChatPanel/ChatPanel";
 import { CommandInput } from "./components/CommandInput/CommandInput";
@@ -72,7 +72,16 @@ function DataReadout({ label, value, color = "#00d4ff" }: { label: string; value
 function LeftPanel() {
   const status = useJarvisStore((s) => s.status);
   const isConnected = useJarvisStore((s) => s.isConnected);
+  const ttsEnabled = useJarvisStore((s) => s.ttsEnabled);
+  const setTtsEnabled = useJarvisStore((s) => s.setTtsEnabled);
+  const wsSend = useJarvisStore((s) => s.wsSend);
   const clearMessages = useJarvisStore((s) => s.clearMessages);
+
+  const toggleMute = () => {
+    const next = !ttsEnabled;
+    setTtsEnabled(next);
+    wsSend?.({ type: "set_tts", payload: { enabled: next } });
+  };
 
   // Fetch real hardware info from server
   const [hwInfo, setHwInfo] = useState({ gpu: "—", vram: "—", cuda: "—" });
@@ -169,6 +178,40 @@ function LeftPanel() {
             </div>
           </motion.div>
         </AnimatePresence>
+      </div>
+
+      {/* Mute button — always visible */}
+      <div className="px-4 pb-2">
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.96 }}
+          onClick={toggleMute}
+          className="w-full flex items-center justify-center gap-2 py-2 rounded transition-all"
+          style={{
+            background: ttsEnabled ? "rgba(0,212,255,0.08)" : "rgba(255,60,60,0.08)",
+            border: `1px solid ${ttsEnabled ? "rgba(0,212,255,0.25)" : "rgba(255,60,60,0.25)"}`,
+            color: ttsEnabled ? "#00d4ff" : "#ff4444",
+            boxShadow: ttsEnabled ? "0 0 16px #00d4ff18" : "0 0 16px #ff444418",
+          }}
+        >
+          <motion.div
+            animate={ttsEnabled ? { scale: [1, 1.1, 1] } : {}}
+            transition={{ duration: 2, repeat: Infinity }}
+          >
+            {ttsEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
+          </motion.div>
+          <span className="text-[10px] tracking-widest font-bold">
+            {ttsEnabled ? "VOIX ACTIVE" : "VOIX COUPÉE"}
+          </span>
+          {ttsEnabled && (
+            <motion.div
+              className="w-1 h-1 rounded-full"
+              style={{ background: "#00d4ff" }}
+              animate={{ opacity: [1, 0.2, 1] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+            />
+          )}
+        </motion.button>
       </div>
 
       {/* Bottom data strip */}

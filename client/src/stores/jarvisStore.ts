@@ -16,6 +16,40 @@ function getAudioContext(): AudioContext {
   return _audioCtx;
 }
 
+function buildJarvisChain(ctx: AudioContext): AudioNode {
+  // High-pass: remove low-end rumble below 90 Hz
+  const hp = ctx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = 90;
+
+  // Presence boost at 3 kHz — gives JARVIS that crisp, clear-articulation quality
+  const presence = ctx.createBiquadFilter();
+  presence.type = "peaking";
+  presence.frequency.value = 3000;
+  presence.Q.value = 1.4;
+  presence.gain.value = 4;
+
+  // Slight high-shelf rolloff above 10 kHz — cuts harshness
+  const shelf = ctx.createBiquadFilter();
+  shelf.type = "highshelf";
+  shelf.frequency.value = 10000;
+  shelf.gain.value = -2;
+
+  // Compressor: tight, even dynamics
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -20;
+  comp.knee.value = 5;
+  comp.ratio.value = 5;
+  comp.attack.value = 0.003;
+  comp.release.value = 0.12;
+
+  hp.connect(presence);
+  presence.connect(shelf);
+  shelf.connect(comp);
+  comp.connect(ctx.destination);
+  return hp; // chain entry point
+}
+
 async function playTtsAudio(b64: string, onDone: () => void) {
   let timeoutId: number | undefined;
   try {
@@ -26,7 +60,9 @@ async function playTtsAudio(b64: string, onDone: () => void) {
     const buffer = await ctx.decodeAudioData(bytes.buffer);
     const source = ctx.createBufferSource();
     source.buffer = buffer;
-    source.connect(ctx.destination);
+    // Slight speed-up: raises pitch ~4% for a crisper, more synthetic quality
+    source.playbackRate.value = 1.04;
+    source.connect(buildJarvisChain(ctx));
 
     timeoutId = window.setTimeout(() => {
       source.stop();
