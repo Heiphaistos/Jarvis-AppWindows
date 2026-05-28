@@ -132,6 +132,13 @@ async def websocket_handler(
 
     await manager.connect(ws)
 
+    # Notify client of server capabilities immediately on connect
+    await manager.send(ws, "server_status", {
+        "llm": llm.is_available,
+        "stt": stt.is_available,
+        "tts": tts.is_available,
+    })
+
     # Per-connection memory — no shared state between clients
     memory = ContextMemory(max_context_messages)
 

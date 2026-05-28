@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Trash2, Volume2, VolumeX } from "lucide-react";
+import { Trash2, Volume2, VolumeX, MicOff } from "lucide-react";
 import { VoiceVisualizer } from "./components/VoiceVisualizer/VoiceVisualizer";
 import { ChatPanel } from "./components/ChatPanel/ChatPanel";
 import { CommandInput } from "./components/CommandInput/CommandInput";
@@ -76,6 +76,8 @@ function LeftPanel() {
   const setTtsEnabled = useJarvisStore((s) => s.setTtsEnabled);
   const wsSend = useJarvisStore((s) => s.wsSend);
   const clearMessages = useJarvisStore((s) => s.clearMessages);
+  const sttAvailable = useJarvisStore((s) => s.sttAvailable);
+  const llmAvailable = useJarvisStore((s) => s.llmAvailable);
 
   const toggleMute = () => {
     const next = !ttsEnabled;
@@ -179,6 +181,25 @@ function LeftPanel() {
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* Warnings: STT / LLM unavailable */}
+      {isConnected && (!sttAvailable || !llmAvailable) && (
+        <div className="px-4 pb-1 flex flex-col gap-1">
+          {!sttAvailable && (
+            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded text-[9px] tracking-wider"
+              style={{ background: "rgba(255,170,0,0.08)", border: "1px solid rgba(255,170,0,0.25)", color: "#ffaa00" }}>
+              <MicOff size={10} />
+              Microphone STT indisponible — modèle Whisper non chargé
+            </div>
+          )}
+          {!llmAvailable && (
+            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded text-[9px] tracking-wider"
+              style={{ background: "rgba(255,60,60,0.08)", border: "1px solid rgba(255,60,60,0.25)", color: "#ff6666" }}>
+              ⚠ LLM indisponible — fichier .gguf manquant dans server/models/
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Mute button — always visible */}
       <div className="px-4 pb-2">

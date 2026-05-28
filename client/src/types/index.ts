@@ -26,7 +26,8 @@ export type ServerEvent =
   | { type: "tts_audio"; payload: { audio: string } }
   | { type: "stt_text"; payload: { text: string } }
   | { type: "tool_result"; payload: { tool: string; result: string } }
-  | { type: "error"; payload: { message: string } };
+  | { type: "error"; payload: { message: string } }
+  | { type: "server_status"; payload: { llm: boolean; stt: boolean; tts: boolean } };
 
 export type ClientEvent =
   | { type: "text_query"; payload: { text: string } }

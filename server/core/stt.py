@@ -63,7 +63,8 @@ class STTManager:
             segments, _ = self._model.transcribe(  # type: ignore[union-attr]
                 audio,
                 language="fr",
-                beam_size=5,
+                beam_size=1,          # greedy decode — 5x faster, negligible quality loss
+                best_of=1,
                 vad_filter=True,
                 vad_parameters={"min_silence_duration_ms": 300},
                 no_speech_threshold=NO_SPEECH_THRESHOLD,

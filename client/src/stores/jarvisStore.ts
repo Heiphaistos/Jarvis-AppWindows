@@ -90,6 +90,8 @@ interface JarvisState {
   ttsEnabled: boolean;
   selectedVoice: string;
   wsSend: ((event: object) => void) | null;
+  sttAvailable: boolean;
+  llmAvailable: boolean;
 
   setStatus: (status: JarvisStatus) => void;
   setConnected: (v: boolean) => void;
@@ -112,6 +114,8 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
   ttsEnabled: true,
   selectedVoice: "fr_FR-upmc-medium",
   wsSend: null,
+  sttAvailable: false,
+  llmAvailable: false,
 
   setStatus: (status) => set({ status }),
   setConnected: (isConnected) => set({ isConnected }),
@@ -195,6 +199,13 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
           role: "system",
           content: `⚠ ${event.payload.message}`,
           timestamp: Date.now(),
+        });
+        break;
+
+      case "server_status":
+        set({
+          sttAvailable: event.payload.stt,
+          llmAvailable: event.payload.llm,
         });
         break;
     }

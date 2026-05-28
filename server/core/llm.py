@@ -94,7 +94,7 @@ class LLMManager:
     async def stream(
         self,
         messages: list[dict[str, str]],
-        max_tokens: int = 512,
+        max_tokens: int = 256,
     ) -> AsyncGenerator[str, None]:
         if self._llm is None:
             yield "Je suis désolé Monsieur, le modèle LLM n'est pas chargé. Veuillez placer un fichier GGUF dans server/models/."

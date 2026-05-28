@@ -111,7 +111,7 @@ export function SettingsPanel() {
       <motion.button
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
-        onClick={() => setOpen(true)}
+        onClick={() => setOpen((v) => !v)}
         className="w-7 h-7 flex items-center justify-center rounded text-blue-400/40 hover:text-cyan-400 hover:bg-cyan-400/10 transition-colors"
         title="Paramètres"
       >
@@ -120,27 +120,23 @@ export function SettingsPanel() {
 
       <AnimatePresence>
         {open && (
-          <>
-            {/* Full-screen backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-              onClick={() => setOpen(false)}
-            />
-
-            {/* Centered modal */}
+          /* Single full-screen container: backdrop click closes, inner panel stops propagation */
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center"
+            style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+            onPointerDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.92, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.92, y: 20 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
-            >
-              <div
-                className="w-[380px] pointer-events-auto"
-                style={{
+              className="w-[380px]"
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{
                   background: "linear-gradient(135deg, rgba(0,15,40,0.98), rgba(0,8,25,0.99))",
                   border: "1px solid rgba(0,212,255,0.2)",
                   borderRadius: "6px",
@@ -371,9 +367,8 @@ export function SettingsPanel() {
 
                 {/* Bottom accent */}
                 <div className="h-px mx-5 mb-3" style={{ background: "linear-gradient(90deg, transparent, #00d4ff22, transparent)" }} />
-              </div>
             </motion.div>
-          </>
+          </motion.div>
         )}
       </AnimatePresence>
     </>
