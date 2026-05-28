@@ -294,6 +294,7 @@ async def websocket_handler(
         manager.disconnect(ws)
     except Exception as e:
         logger.error(f"Erreur WebSocket: {e}", exc_info=True)
+        _rate_limiter.cleanup(ws_id)
         audio_buffer.clear()
         try:
             await manager.send(ws, "error", {"message": "Erreur interne du serveur."})
