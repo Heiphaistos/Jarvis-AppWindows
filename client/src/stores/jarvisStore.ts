@@ -114,8 +114,8 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
   ttsEnabled: true,
   selectedVoice: "fr_FR-upmc-medium",
   wsSend: null,
-  sttAvailable: false,
-  llmAvailable: false,
+  sttAvailable: true,
+  llmAvailable: true,
 
   setStatus: (status) => set({ status }),
   setConnected: (isConnected) => set({ isConnected }),
