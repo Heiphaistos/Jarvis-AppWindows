@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     port: int = 8765
 
     # LLM
-    model_path: Path = MODELS_DIR / "mistral-7b-instruct-v0.3.Q4_K_M.gguf"
+    model_path: Path = MODELS_DIR / "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf"
     n_ctx: int = 4096
     n_gpu_layers: int = 35
     n_threads: int = 8

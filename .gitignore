@@ -14,6 +14,7 @@ build/
 server/models/*.gguf
 server/models/*.bin
 server/models/piper/
+server/models/.cache/
 
 # Tauri build
 client/src-tauri/target/
@@ -32,6 +33,9 @@ client/dist/
 Thumbs.db
 .DS_Store
 desktop.ini
+
+# Misc
+install_log.txt
 
 # PyInstaller
 server/dist/
