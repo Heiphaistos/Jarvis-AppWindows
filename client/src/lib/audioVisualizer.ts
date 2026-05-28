@@ -3,6 +3,7 @@ export interface VisualizerOptions {
   analyser: AnalyserNode;
   status: "idle" | "listening" | "processing" | "speaking" | "error";
   time: number;
+  ttsAnalyser?: AnalyserNode | null;
 }
 
 const STATUS_COLORS: Record<string, [string, string]> = {
@@ -40,7 +41,7 @@ function hex(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, c
   ctx.restore();
 }
 
-export function drawFrame({ canvas, analyser, status, time }: VisualizerOptions) {
+export function drawFrame({ canvas, analyser, status, time, ttsAnalyser = null }: VisualizerOptions) {
   const ctx = canvas.getContext("2d")!;
   const W = canvas.width;
   const H = canvas.height;
@@ -49,9 +50,11 @@ export function drawFrame({ canvas, analyser, status, time }: VisualizerOptions)
   const [col, col2] = STATUS_COLORS[status] ?? STATUS_COLORS.idle;
   const t = time * 0.001;
 
-  const bufLen = analyser.frequencyBinCount;
-  const rawData = getFreqBuffer(analyser);
-  analyser.getByteFrequencyData(rawData);
+  // Quand SPEAKING, utilise les fréquences TTS réelles
+  const activeAnalyser = status === "speaking" && ttsAnalyser ? ttsAnalyser : analyser;
+  const bufLen = activeAnalyser.frequencyBinCount;
+  const rawData = getFreqBuffer(activeAnalyser);
+  activeAnalyser.getByteFrequencyData(rawData);
   const rawAvg = rawData.slice(0, 80).reduce((s, v) => s + v, 0) / 80 / 255;
 
   const idlePulse = status === "idle" || rawAvg < 0.02;
