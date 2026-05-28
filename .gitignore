@@ -15,6 +15,7 @@ server/models/*.gguf
 server/models/*.bin
 server/models/piper/
 server/models/.cache/
+server/models/faster-whisper-*/
 
 # Tauri build
 client/src-tauri/target/

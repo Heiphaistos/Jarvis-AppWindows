@@ -9,6 +9,17 @@ if TYPE_CHECKING:
 
 logger = get_logger("stt")
 
+# Minimum RMS amplitude to consider audio as speech (not silence/noise)
+RMS_THRESHOLD = 0.005
+# Whisper no-speech probability threshold — discard hallucinated segments
+NO_SPEECH_THRESHOLD = 0.6
+# Known Whisper hallucination phrases to discard
+HALLUCINATION_PHRASES = {
+    "amara.org", "sous-titres", "sous-titrage", "transcription",
+    "merci d'avoir regardé", "à bientôt", "sous-titré par",
+    "traduction", "traducteur", "www.", ".com", ".org",
+}
+
 
 class STTManager:
     def __init__(self, settings: "Settings") -> None:
@@ -31,6 +42,11 @@ class STTManager:
     def is_available(self) -> bool:
         return self._model is not None
 
+    @staticmethod
+    def _is_hallucination(text: str) -> bool:
+        t = text.lower()
+        return any(phrase in t for phrase in HALLUCINATION_PHRASES)
+
     async def transcribe_chunks(
         self, chunks: list[list[float]], sample_rate: int
     ) -> str:
@@ -41,9 +57,34 @@ class STTManager:
             audio = np.concatenate(
                 [np.array(c, dtype=np.float32) for c in chunks]
             )
-            segments, _ = self._model.transcribe(  # type: ignore[union-attr]
-                audio, language="fr", beam_size=5
+            # Silence gate — skip transcription if audio is just noise
+            rms = float(np.sqrt(np.mean(audio ** 2)))
+            if rms < RMS_THRESHOLD:
+                logger.debug(f"Audio ignoré (silence) — RMS={rms:.4f}")
+                return ""
+
+            segments, info = self._model.transcribe(  # type: ignore[union-attr]
+                audio,
+                language="fr",
+                beam_size=5,
+                vad_filter=True,          # built-in VAD from Silero
+                vad_parameters={"min_silence_duration_ms": 300},
+                no_speech_threshold=NO_SPEECH_THRESHOLD,
             )
-            return " ".join(s.text.strip() for s in segments)
+
+            result_parts: list[str] = []
+            for seg in segments:
+                txt = seg.text.strip()
+                if not txt:
+                    continue
+                if seg.no_speech_prob > NO_SPEECH_THRESHOLD:
+                    logger.debug(f"Segment rejeté (no_speech={seg.no_speech_prob:.2f}): {txt!r}")
+                    continue
+                if STTManager._is_hallucination(txt):
+                    logger.debug(f"Hallucination rejetée: {txt!r}")
+                    continue
+                result_parts.append(txt)
+
+            return " ".join(result_parts)
 
         return await asyncio.to_thread(_run)

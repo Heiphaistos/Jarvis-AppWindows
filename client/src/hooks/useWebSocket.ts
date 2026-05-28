@@ -9,13 +9,25 @@ export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<number | undefined>(undefined);
 
+  const send = useCallback((event: ClientEvent) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(event));
+    }
+  }, []);
+
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
 
-    ws.onopen = () => useJarvisStore.getState().setConnected(true);
+    ws.onopen = () => {
+      useJarvisStore.getState().setConnected(true);
+      // Expose send to the store so tts_audio handler can use it
+      useJarvisStore.getState().setWsSend((event) => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(event));
+      });
+    };
 
     ws.onmessage = (evt) => {
       try {
@@ -41,12 +53,6 @@ export function useWebSocket() {
       wsRef.current?.close();
     };
   }, [connect]);
-
-  const send = useCallback((event: ClientEvent) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(event));
-    }
-  }, []);
 
   return { send };
 }

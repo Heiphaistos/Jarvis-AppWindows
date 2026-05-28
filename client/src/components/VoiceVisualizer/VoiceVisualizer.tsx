@@ -5,6 +5,7 @@ import { drawFrame } from "../../lib/audioVisualizer";
 export function VoiceVisualizer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number>(0);
+  const startRef = useRef<number>(0);
   const status = useJarvisStore((s) => s.status);
 
   useEffect(() => {
@@ -13,13 +14,14 @@ export function VoiceVisualizer() {
 
     const audioCtx = new AudioContext();
     const analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 256;
+    analyser.fftSize = 512;
+    startRef.current = performance.now();
 
-    const loop = () => {
-      drawFrame({ canvas, analyser, status });
+    const loop = (now: number) => {
+      drawFrame({ canvas, analyser, status, time: now - startRef.current });
       animRef.current = requestAnimationFrame(loop);
     };
-    loop();
+    animRef.current = requestAnimationFrame(loop);
 
     return () => {
       cancelAnimationFrame(animRef.current);
@@ -28,12 +30,15 @@ export function VoiceVisualizer() {
   }, [status]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={260}
-      height={260}
-      className="rounded-full"
-      style={{ filter: "drop-shadow(0 0 20px #00d4ff66)" }}
-    />
+    <div className="relative">
+      <canvas
+        ref={canvasRef}
+        width={300}
+        height={300}
+        style={{
+          filter: "drop-shadow(0 0 24px #00d4ff55) drop-shadow(0 0 8px #00d4ff33)",
+        }}
+      />
+    </div>
   );
 }

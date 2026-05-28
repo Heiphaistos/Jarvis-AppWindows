@@ -24,10 +24,12 @@ export type ServerEvent =
   | { type: "token"; payload: { token: string; messageId: string } }
   | { type: "message_done"; payload: { messageId: string } }
   | { type: "tts_audio"; payload: { audio: string } }
+  | { type: "stt_text"; payload: { text: string } }
   | { type: "tool_result"; payload: { tool: string; result: string } }
   | { type: "error"; payload: { message: string } };
 
 export type ClientEvent =
   | { type: "text_query"; payload: { text: string } }
   | { type: "audio_chunk"; payload: AudioChunk }
-  | { type: "stop_speaking" };
+  | { type: "mic_stop"; payload: Record<string, never> }
+  | { type: "tts_done"; payload: Record<string, never> };
