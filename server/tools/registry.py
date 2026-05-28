@@ -14,6 +14,8 @@ class ToolRegistry:
         from tools.system_tools import open_application, kill_application
         from tools.file_tools import delete_temp_files, create_file, move_file
         from tools.info_tools import get_system_info
+        from tools.web_tools import web_search
+        from tools.email_tools import list_emails, send_email
 
         for fn in [
             open_application,
@@ -22,6 +24,9 @@ class ToolRegistry:
             create_file,
             move_file,
             get_system_info,
+            web_search,
+            list_emails,
+            send_email,
         ]:
             self._tools[fn.__name__] = fn
 
