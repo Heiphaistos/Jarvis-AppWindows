@@ -6,6 +6,9 @@ const MAX_MESSAGES = 200;
 // Singleton AudioContext — one per app session
 let _audioCtx: AudioContext | null = null;
 export let ttsAnalyser: AnalyserNode | null = null;
+export function getTtsAnalyser(): AnalyserNode | null {
+  return ttsAnalyser;
+}
 function getAudioContext(): AudioContext {
   if (!_audioCtx || _audioCtx.state === "closed") {
     _audioCtx = new AudioContext();

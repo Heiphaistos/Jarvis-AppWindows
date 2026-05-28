@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { useJarvisStore, ttsAnalyser } from "../../stores/jarvisStore";
+import { useJarvisStore, getTtsAnalyser } from "../../stores/jarvisStore";
 import { drawFrame } from "../../lib/audioVisualizer";
 
 export function VoiceVisualizer() {
@@ -30,7 +30,7 @@ export function VoiceVisualizer() {
         analyser,
         status,
         time: now - startRef.current,
-        ttsAnalyser,
+        ttsAnalyser: getTtsAnalyser(),
       });
       animRef.current = requestAnimationFrame(loop);
     };
