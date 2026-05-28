@@ -1,5 +1,7 @@
 from __future__ import annotations
+import asyncio
 import json
+import re
 import uuid
 from fastapi import WebSocket, WebSocketDisconnect
 from utils.logger import get_logger
@@ -16,6 +18,8 @@ CHUNK_THRESHOLD = 8
 MAX_PAYLOAD_BYTES = 2 * 1024 * 1024   # 2 MB — audio chunk upper bound
 MAX_TEXT_CHARS = 2000
 ALLOWED_ORIGINS = {"http://localhost:1420", "http://127.0.0.1:1420", "tauri://localhost"}
+
+_SENTENCE_BOUNDARY = re.compile(r'(?<=[.!?…»])\s')
 
 
 class ConnectionManager:
@@ -39,6 +43,24 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+async def _tts_sentence_worker(
+    queue: asyncio.Queue[str | None],
+    ws: WebSocket,
+    tts: TTSManager,
+) -> None:
+    """Consomme les phrases de la queue, synthétise et envoie les chunks audio."""
+    index = 0
+    while True:
+        sentence: str | None = await queue.get()
+        if sentence is None:
+            await manager.send(ws, "tts_chunk", {"audio": "", "final": True, "index": index})
+            return
+        audio_b64 = await tts.synthesize(sentence)
+        if audio_b64:
+            await manager.send(ws, "tts_chunk", {"audio": audio_b64, "final": False, "index": index})
+            index += 1
+
+
 async def handle_text_query(
     ws: WebSocket,
     text: str,
@@ -52,30 +74,72 @@ async def handle_text_query(
     memory.add_user(text)
     message_id = str(uuid.uuid4())
 
+    # ── Phase 1 : Stream LLM + détection phrases pour TTS concurrent ─────────
+    tts_queue: asyncio.Queue[str | None] = asyncio.Queue()
+    tts_task = None
+    if tts_enabled and tts.is_available:
+        await manager.send(ws, "status", {"status": "speaking"})
+        tts_task = asyncio.create_task(_tts_sentence_worker(tts_queue, ws, tts))
+
     full_response = ""
+    sentence_buf = ""
+
     async for token in llm.stream(memory.get_messages()):
         full_response += token
-        # Don't stream the internal tool-call marker to the client
         if "<JARVIS_TOOL>" not in full_response:
             await manager.send(ws, "token", {"token": token, "messageId": message_id})
 
-    # Handle tool call if present
+        if tts_task and "<JARVIS_TOOL>" not in full_response:
+            sentence_buf += token
+            m = _SENTENCE_BOUNDARY.search(sentence_buf)
+            if m:
+                phrase = sentence_buf[: m.start() + 1].strip()
+                sentence_buf = sentence_buf[m.end():]
+                if phrase:
+                    await tts_queue.put(phrase)
+
+    # Flush le buffer restant
+    if tts_task:
+        if sentence_buf.strip() and "<JARVIS_TOOL>" not in sentence_buf:
+            await tts_queue.put(sentence_buf.strip())
+        await tts_queue.put(None)
+
+    # ── Phase 2 : Tool call si détecté ──────────────────────────────────────
     tool_call = parse_tool_call(full_response)
     if tool_call:
         tool_name, tool_args = tool_call
         logger.info(f"Tool call: {tool_name}({tool_args})")
         tool_result = tools.execute(tool_name, **tool_args)
 
-        # Inject tool result and ask LLM for a natural response
         tool_context = f"[Résultat de {tool_name}: {tool_result}]"
         memory.add_assistant(tool_context)
 
-        # Second LLM pass — send result to client as continuation
         second_id = str(uuid.uuid4())
         second_response = ""
+        second_buf = ""
+
+        tts_queue2: asyncio.Queue[str | None] = asyncio.Queue()
+        tts_task2 = None
+        if tts_enabled and tts.is_available:
+            tts_task2 = asyncio.create_task(_tts_sentence_worker(tts_queue2, ws, tts))
+
         async for token in llm.stream(memory.get_messages(), max_tokens=256):
             second_response += token
             await manager.send(ws, "token", {"token": token, "messageId": second_id})
+            if tts_task2:
+                second_buf += token
+                m2 = _SENTENCE_BOUNDARY.search(second_buf)
+                if m2:
+                    phrase2 = second_buf[: m2.start() + 1].strip()
+                    second_buf = second_buf[m2.end():]
+                    if phrase2:
+                        await tts_queue2.put(phrase2)
+
+        if tts_task2:
+            if second_buf.strip():
+                await tts_queue2.put(second_buf.strip())
+            await tts_queue2.put(None)
+            await tts_task2
 
         memory.add_assistant(second_response)
         await manager.send(ws, "message_done", {"messageId": second_id})
@@ -83,16 +147,12 @@ async def handle_text_query(
         memory.add_assistant(full_response)
         await manager.send(ws, "message_done", {"messageId": message_id})
 
-    if tts_enabled and (tool_call or full_response.strip()) and tts.is_available:
-        tts_text = full_response if not tool_call else second_response  # type: ignore[possibly-undefined]
-        if tts_text.strip():
-            await manager.send(ws, "status", {"status": "speaking"})
-            audio_b64 = await tts.synthesize(tts_text)
-            if audio_b64:
-                await manager.send(ws, "tts_audio", {"audio": audio_b64})
-                return
+    # Attendre fin TTS principal
+    if tts_task:
+        await tts_task
 
-    await manager.send(ws, "status", {"status": "idle"})
+    if not tts_enabled or not tts.is_available:
+        await manager.send(ws, "status", {"status": "idle"})
 
 
 async def transcribe_and_query(

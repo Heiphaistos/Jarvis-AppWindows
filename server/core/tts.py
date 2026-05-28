@@ -3,9 +3,12 @@ import asyncio
 import subprocess
 import base64
 import tempfile
+import re as _re
 from pathlib import Path
 from typing import TYPE_CHECKING
 from utils.logger import get_logger
+
+_SENTENCE_END = _re.compile(r'(?<=[.!?…»])\s+|(?<=[.!?…»])$')
 
 if TYPE_CHECKING:
     from utils.config import Settings
@@ -33,6 +36,12 @@ class TTSManager:
         self._voice = voice_path
         self._available = self._piper_exe.exists() and voice_path.exists()
         logger.info(f"Voix TTS changée: {voice_path.name}")
+
+    @staticmethod
+    def split_sentences(text: str) -> list[str]:
+        """Découpe le texte en phrases sur ponctuation forte."""
+        parts = _SENTENCE_END.split(text.strip())
+        return [p.strip() for p in parts if p.strip()]
 
     async def synthesize(self, text: str) -> str | None:
         if not self._available:
