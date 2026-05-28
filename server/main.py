@@ -41,6 +41,10 @@ stt = STTManager(settings)
 tts = TTSManager(settings)
 tools = ToolRegistry()
 
+# Init persistent memory early so tools can access the singleton
+from core.persistent_memory import get_memory as _init_memory
+_init_memory()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:

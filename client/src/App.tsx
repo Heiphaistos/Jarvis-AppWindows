@@ -104,6 +104,16 @@ function LeftPanel() {
       .catch(() => {/* server offline */});
   }, [isConnected]);
 
+  // Fetch memory count from server
+  const [memCount, setMemCount] = useState(0);
+  useEffect(() => {
+    if (!isConnected) return;
+    fetch("http://127.0.0.1:8765/api/memories/count")
+      .then((r) => r.json())
+      .then((d: { count: number }) => setMemCount(d.count))
+      .catch(() => {});
+  }, [isConnected]);
+
   const statusColors: Record<JarvisStatus, string> = {
     idle: "#00d4ff",
     listening: "#00ff88",
@@ -240,7 +250,7 @@ function LeftPanel() {
         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
           <DataReadout label="CONNEXION" value={isConnected ? "ACTIVE" : "COUPÉE"} color={isConnected ? "#00ff88" : "#ff3333"} />
           <DataReadout label="PROTOCOLE" value="WS-8765" />
-          <DataReadout label="MÉMOIRE" value="20 MSG" />
+          <DataReadout label="MÉMOIRE" value={`${memCount} FACTS`} />
           <DataReadout label="MODÈLE" value="MISTRAL 7B" />
         </div>
         {/* Clear history button */}
@@ -380,7 +390,7 @@ function Header() {
           <span ref={timeRef} />
         </span>
         <div className="w-px h-3 bg-cyan-900/40" />
-        <span className="text-[10px] text-cyan-400/60 tracking-widest">v1.1.0</span>
+        <span className="text-[10px] text-cyan-400/60 tracking-widest">v2.0.0</span>
         <div className="w-px h-3 bg-cyan-900/40" />
         <SettingsPanel />
         <div className="w-px h-3 bg-cyan-900/40" />

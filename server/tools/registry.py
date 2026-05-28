@@ -11,22 +11,28 @@ class ToolRegistry:
         self._register_defaults()
 
     def _register_defaults(self) -> None:
-        from tools.system_tools import open_application, kill_application
+        from tools.system_tools import (
+            open_application, kill_application,
+            take_screenshot, read_clipboard, write_clipboard,
+        )
         from tools.file_tools import delete_temp_files, create_file, move_file
-        from tools.info_tools import get_system_info
+        from tools.info_tools import (
+            get_system_info, diagnose_system, list_processes,
+            get_weather, get_news,
+        )
         from tools.web_tools import web_search
         from tools.email_tools import list_emails, send_email
+        from tools.memory_tools import save_memory, recall_memory, list_memories
 
         for fn in [
-            open_application,
-            kill_application,
-            delete_temp_files,
-            create_file,
-            move_file,
-            get_system_info,
+            open_application, kill_application,
+            take_screenshot, read_clipboard, write_clipboard,
+            delete_temp_files, create_file, move_file,
+            get_system_info, diagnose_system, list_processes,
+            get_weather, get_news,
             web_search,
-            list_emails,
-            send_email,
+            list_emails, send_email,
+            save_memory, recall_memory, list_memories,
         ]:
             self._tools[fn.__name__] = fn
 

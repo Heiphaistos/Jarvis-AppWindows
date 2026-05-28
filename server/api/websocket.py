@@ -134,7 +134,7 @@ async def handle_text_query(
     message_id = str(uuid.uuid4())
 
     full_response = await _stream_llm_with_tts(
-        ws, llm, memory, tts, tts_enabled, message_id
+        ws, llm, memory, tts, tts_enabled, message_id, max_tokens=512
     )
 
     # ── Tool call si détecté ────────────────────────────────────────────────

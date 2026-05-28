@@ -37,7 +37,16 @@ class GmailStatusResponse(BaseModel):
 
 @router.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
-    return HealthResponse(status="ok", version="1.1.0")
+    return HealthResponse(status="ok", version="2.0.0")
+
+
+@router.get("/memories/count")
+async def memories_count() -> dict:
+    try:
+        from core.persistent_memory import get_memory
+        return {"count": get_memory().count()}
+    except Exception:
+        return {"count": 0}
 
 
 @router.get("/voices", response_model=VoicesResponse)
