@@ -1,11 +1,18 @@
 from __future__ import annotations
-from pydantic_settings import BaseSettings
+from functools import lru_cache
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
-from utils.hardware import detect_profile, HardwareProfile
+from utils.hardware import detect_profile as _detect_profile, HardwareProfile
 
 MODELS_DIR = Path(__file__).parents[1] / "models"
 
-_profile: HardwareProfile = detect_profile()
+
+@lru_cache(maxsize=1)
+def _get_profile() -> HardwareProfile:
+    return _detect_profile()
+
+
+_profile: HardwareProfile = _get_profile()
 
 
 class Settings(BaseSettings):
@@ -27,7 +34,7 @@ class Settings(BaseSettings):
     max_context_messages: int = 20
     hw_profile: str = _profile.name
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
 settings = Settings()

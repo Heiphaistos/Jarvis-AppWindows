@@ -6,6 +6,9 @@ from utils.logger import get_logger
 
 logger = get_logger("hardware")
 
+_VRAM_HIGH_MB = 16_000
+_VRAM_MEDIUM_MB = 7_000
+
 
 @dataclass(frozen=True)
 class HardwareProfile:
@@ -32,7 +35,7 @@ _NVIDIA_HIGH = HardwareProfile(
 _NVIDIA_MEDIUM = HardwareProfile(
     name="nvidia_medium",
     device="cuda", vram_mb=0,
-    n_gpu_layers=28,
+    n_gpu_layers=28,             # couches Mistral-7B Q4_K_M ≈ 4.4 GB VRAM
     n_threads=8,
     whisper_model="small",
     whisper_compute="float16",
@@ -71,19 +74,28 @@ _CPU_STANDARD = HardwareProfile(
 
 
 def _nvidia_vram() -> tuple[str, int] | None:
+    """Retourne (nom_gpu, vram_mb) du GPU avec le plus de VRAM, ou None."""
     try:
-        r = subprocess.run(
+        proc = subprocess.run(
             ["nvidia-smi", "--query-gpu=name,memory.total",
              "--format=csv,noheader,nounits"],
             capture_output=True, text=True, timeout=5,
         )
-        if r.returncode != 0:
+        if proc.returncode != 0:
             return None
-        line = r.stdout.strip().split("\n")[0]
-        parts = line.split(",")
-        if len(parts) < 2:
-            return None
-        return parts[0].strip(), int(parts[1].strip())
+        best: tuple[str, int] | None = None
+        for line in proc.stdout.strip().split("\n"):
+            parts = line.split(",")
+            if len(parts) < 2:
+                continue
+            try:
+                vram_mb = int(parts[1].strip())
+            except ValueError:
+                logger.warning(f"nvidia-smi: parse VRAM échoué pour '{line.strip()}'")
+                continue
+            if best is None or vram_mb > best[1]:
+                best = (parts[0].strip(), vram_mb)
+        return best
     except Exception as e:
         logger.debug(f"nvidia-smi indisponible: {e}")
         return None
@@ -97,9 +109,9 @@ def detect_profile() -> HardwareProfile:
     nvidia = _nvidia_vram()
     if nvidia:
         name, vram_mb = nvidia
-        if vram_mb >= 16_000:
+        if vram_mb >= _VRAM_HIGH_MB:
             profile = _NVIDIA_HIGH
-        elif vram_mb >= 7_000:
+        elif vram_mb >= _VRAM_MEDIUM_MB:
             profile = _NVIDIA_MEDIUM
         else:
             profile = _NVIDIA_LOW
