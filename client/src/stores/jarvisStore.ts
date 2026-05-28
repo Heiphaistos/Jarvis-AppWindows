@@ -2,17 +2,18 @@ import { create } from "zustand";
 import type { JarvisStatus, Message, ServerEvent } from "../types";
 
 const MAX_MESSAGES = 200;
-const TTS_TIMEOUT_MS = 60_000;
 
 // Singleton AudioContext — one per app session
 let _audioCtx: AudioContext | null = null;
+export let ttsAnalyser: AnalyserNode | null = null;
 function getAudioContext(): AudioContext {
   if (!_audioCtx || _audioCtx.state === "closed") {
     _audioCtx = new AudioContext();
+    ttsAnalyser = _audioCtx.createAnalyser();
+    ttsAnalyser.fftSize = 512;
+    ttsAnalyser.connect(_audioCtx.destination);
   }
-  if (_audioCtx.state === "suspended") {
-    void _audioCtx.resume();
-  }
+  if (_audioCtx.state === "suspended") void _audioCtx.resume();
   return _audioCtx;
 }
 
@@ -46,7 +47,11 @@ function buildJarvisChain(ctx: AudioContext): AudioNode {
   hp.connect(presence);
   presence.connect(shelf);
   shelf.connect(comp);
-  comp.connect(ctx.destination);
+  if (ttsAnalyser) {
+    comp.connect(ttsAnalyser);
+  } else {
+    comp.connect(ctx.destination);
+  }
   return hp; // chain entry point
 }
 
@@ -78,6 +83,52 @@ async function playTtsAudio(b64: string, onDone: () => void) {
     console.error("TTS playback error:", e);
     clearTimeout(timeoutId);
     onDone();
+  }
+}
+
+const _ttsQueue: string[] = [];
+let _ttsPlaying = false;
+const TTS_TIMEOUT_MS = 60_000;
+
+async function _playNextChunk(onAllDone: () => void): Promise<void> {
+  if (_ttsQueue.length === 0) {
+    _ttsPlaying = false;
+    onAllDone();
+    return;
+  }
+  const b64 = _ttsQueue.shift()!;
+  try {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const ctx = getAudioContext();
+    const buffer = await ctx.decodeAudioData(bytes.buffer);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = 1.04;
+    source.connect(buildJarvisChain(ctx));
+
+    let tid: number | undefined;
+    const next = () => {
+      clearTimeout(tid);
+      void _playNextChunk(onAllDone);
+    };
+    tid = window.setTimeout(next, TTS_TIMEOUT_MS);
+    source.onended = next;
+    source.start(0);
+  } catch (e) {
+    console.error("TTS chunk error:", e);
+    void _playNextChunk(onAllDone);
+  }
+}
+
+function enqueueTtsChunk(b64: string, final: boolean, onAllDone: () => void): void {
+  if (b64) _ttsQueue.push(b64);
+  if (!_ttsPlaying && _ttsQueue.length > 0) {
+    _ttsPlaying = true;
+    void _playNextChunk(onAllDone);
+  } else if (final && _ttsQueue.length === 0 && !_ttsPlaying) {
+    onAllDone();
   }
 }
 
@@ -191,6 +242,22 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
           wsSend?.({ type: "tts_done", payload: {} });
         }
         break;
+
+      case "tts_chunk": {
+        const { audio, final } = event.payload;
+        if (!get().ttsEnabled) {
+          if (final) {
+            setStatus("idle");
+            wsSend?.({ type: "tts_done", payload: {} });
+          }
+          return;
+        }
+        enqueueTtsChunk(audio, final, () => {
+          setStatus("idle");
+          wsSend?.({ type: "tts_done", payload: {} });
+        });
+        break;
+      }
 
       case "error":
         setStatus("error");
