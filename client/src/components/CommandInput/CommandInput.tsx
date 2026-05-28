@@ -10,8 +10,9 @@ export function CommandInput() {
   const inputRef = useRef<HTMLInputElement>(null);
   const { sendText, toggleMic, isMicActive } = useJarvis();
   const status = useJarvisStore((s) => s.status);
+  const isConnected = useJarvisStore((s) => s.isConnected);
   const addMessage = useJarvisStore((s) => s.addMessage);
-  const isDisabled = status === "processing" || status === "speaking";
+  const isDisabled = !isConnected || status === "processing" || status === "speaking";
 
   const handleSubmit = useCallback(() => {
     if (!text.trim() || isDisabled) return;
@@ -87,7 +88,7 @@ export function CommandInput() {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={isDisabled}
-          placeholder={isMicActive ? "Parlez maintenant..." : "Entrez une commande..."}
+          placeholder={!isConnected ? "CORE OFFLINE — en attente de connexion..." : isMicActive ? "Parlez maintenant..." : "Entrez une commande..."}
           className="flex-1 bg-transparent text-cyan-100 text-sm placeholder-blue-400/30 outline-none font-mono tracking-wide"
           style={{ caretColor: activeColor }}
           autoFocus

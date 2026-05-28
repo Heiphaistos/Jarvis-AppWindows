@@ -6,10 +6,22 @@ from utils.logger import get_logger
 logger = get_logger("info_tools")
 
 
+def _main_disk_usage() -> str:
+    """Return disk usage for the first accessible partition."""
+    for part in psutil.disk_partitions():
+        try:
+            usage = psutil.disk_usage(part.mountpoint)
+            label = part.mountpoint.rstrip("/\\") or part.device
+            return f"Disque {label}: {usage.used // 1024**3}/{usage.total // 1024**3} GB"
+        except (PermissionError, OSError):
+            continue
+    return "Disque: N/A"
+
+
 def get_system_info() -> str:
     cpu = psutil.cpu_percent(interval=0.5)
     mem = psutil.virtual_memory()
-    disk = psutil.disk_usage("C:\\")
+    disk_str = _main_disk_usage()
 
     gpu_info = "N/A"
     try:
@@ -33,6 +45,6 @@ def get_system_info() -> str:
     return (
         f"CPU: {cpu}% | "
         f"RAM: {mem.used // 1024**2}/{mem.total // 1024**2} MB ({mem.percent}%) | "
-        f"Disque C: {disk.used // 1024**3}/{disk.total // 1024**3} GB | "
+        f"{disk_str} | "
         f"GPU: {gpu_info}"
     )

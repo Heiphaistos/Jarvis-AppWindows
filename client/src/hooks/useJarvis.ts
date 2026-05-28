@@ -22,8 +22,13 @@ export function useJarvis() {
       stopCapture();
       useJarvisStore.getState().setMicActive(false);
     } else {
-      await startCapture();
-      useJarvisStore.getState().setMicActive(true);
+      try {
+        await startCapture();
+        useJarvisStore.getState().setMicActive(true);
+      } catch {
+        // Error already set in store by useAudioCapture
+        useJarvisStore.getState().setMicActive(false);
+      }
     }
   }, [isMicActive, startCapture, stopCapture]);
 

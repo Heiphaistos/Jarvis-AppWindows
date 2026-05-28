@@ -24,12 +24,13 @@ export function SettingsPanel() {
   const wsSend = useJarvisStore((s) => s.wsSend);
   const [availableVoices, setAvailableVoices] = useState<string[]>([]);
 
+  // Fetch voices once on mount, not on every panel open
   useEffect(() => {
     fetch("http://127.0.0.1:8765/api/voices")
       .then((r) => r.json())
       .then((d) => setAvailableVoices(d.voices ?? []))
       .catch(() => setAvailableVoices(["fr_FR-upmc-medium"]));
-  }, [open]);
+  }, []);
 
   const applyVoice = (voiceId: string) => {
     setSelectedVoice(voiceId);
@@ -44,7 +45,6 @@ export function SettingsPanel() {
 
   return (
     <>
-      {/* Settings button */}
       <motion.button
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
@@ -58,7 +58,6 @@ export function SettingsPanel() {
       <AnimatePresence>
         {open && (
           <>
-            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -67,7 +66,6 @@ export function SettingsPanel() {
               onClick={() => setOpen(false)}
             />
 
-            {/* Panel */}
             <motion.div
               initial={{ opacity: 0, x: 20, scale: 0.95 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
@@ -82,7 +80,6 @@ export function SettingsPanel() {
                 boxShadow: "0 0 40px #00d4ff11, 0 20px 60px rgba(0,0,0,0.8)",
               }}
             >
-              {/* Header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-cyan-900/30">
                 <div className="flex items-center gap-2">
                   <Settings size={12} className="text-cyan-400/60" />
@@ -173,7 +170,6 @@ export function SettingsPanel() {
                 </div>
               </div>
 
-              {/* Bottom accent */}
               <div className="h-px mx-4 mb-3" style={{ background: "linear-gradient(90deg, transparent, #00d4ff22, transparent)" }} />
             </motion.div>
           </>

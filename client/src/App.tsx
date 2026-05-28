@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { Trash2 } from "lucide-react";
 import { VoiceVisualizer } from "./components/VoiceVisualizer/VoiceVisualizer";
 import { ChatPanel } from "./components/ChatPanel/ChatPanel";
 import { CommandInput } from "./components/CommandInput/CommandInput";
@@ -8,7 +9,6 @@ import { SettingsPanel } from "./components/Settings/SettingsPanel";
 import { useJarvisStore } from "./stores/jarvisStore";
 import type { JarvisStatus } from "./types";
 
-// ── Hex grid SVG background ─────────────────────────────────────────────────
 function HexGrid() {
   return (
     <svg className="absolute inset-0 w-full h-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
@@ -28,7 +28,6 @@ function HexGrid() {
   );
 }
 
-// ── Scanning horizontal line ─────────────────────────────────────────────────
 function ScanLine() {
   return (
     <motion.div
@@ -41,7 +40,6 @@ function ScanLine() {
   );
 }
 
-// ── Corner brackets ──────────────────────────────────────────────────────────
 function Corner({ pos }: { pos: "tl" | "tr" | "bl" | "br" }) {
   const posClass = {
     tl: "top-0 left-0",
@@ -58,7 +56,6 @@ function Corner({ pos }: { pos: "tl" | "tr" | "bl" | "br" }) {
   );
 }
 
-// ── HUD data readout ─────────────────────────────────────────────────────────
 function DataReadout({ label, value, color = "#00d4ff" }: { label: string; value: string; color?: string }) {
   return (
     <div className="flex flex-col gap-0.5">
@@ -72,10 +69,29 @@ function DataReadout({ label, value, color = "#00d4ff" }: { label: string; value
   );
 }
 
-// ── Left HUD panel ───────────────────────────────────────────────────────────
 function LeftPanel() {
   const status = useJarvisStore((s) => s.status);
   const isConnected = useJarvisStore((s) => s.isConnected);
+  const clearMessages = useJarvisStore((s) => s.clearMessages);
+
+  // Fetch real hardware info from server
+  const [hwInfo, setHwInfo] = useState({ gpu: "—", vram: "—", cuda: "—" });
+  useEffect(() => {
+    if (!isConnected) return;
+    fetch("http://127.0.0.1:8765/api/system_info")
+      .then((r) => r.json())
+      .then((d: { info: string }) => {
+        const info = d.info;
+        const gpuMatch = info.match(/GPU: ([^|]+)/);
+        const vramMatch = info.match(/VRAM: (\d+)\/(\d+)/);
+        setHwInfo({
+          gpu: gpuMatch ? gpuMatch[1].trim() : "—",
+          vram: vramMatch ? `${vramMatch[2]} MB` : "—",
+          cuda: "CUDA",
+        });
+      })
+      .catch(() => {/* server offline */});
+  }, [isConnected]);
 
   const statusColors: Record<JarvisStatus, string> = {
     idle: "#00d4ff",
@@ -98,9 +114,9 @@ function LeftPanel() {
       {/* Top data strip */}
       <div className="px-4 pt-3 pb-2 border-b border-cyan-900/20 flex flex-col gap-2">
         <div className="flex justify-between items-start">
-          <DataReadout label="PROCESSEUR" value="RTX 3070" />
-          <DataReadout label="VRAM" value="8.0 GB" />
-          <DataReadout label="CUDA" value="v13.1" />
+          <DataReadout label="PROCESSEUR" value={hwInfo.gpu.length > 12 ? hwInfo.gpu.slice(0, 12) + "…" : hwInfo.gpu} />
+          <DataReadout label="VRAM" value={hwInfo.vram} />
+          <DataReadout label="MOTEUR" value={hwInfo.cuda} />
         </div>
         <div className="h-1 bg-cyan-950 rounded-full overflow-hidden">
           <motion.div
@@ -115,7 +131,6 @@ function LeftPanel() {
       {/* Arc reactor visualizer */}
       <div className="flex-1 flex flex-col items-center justify-center gap-4 py-4">
         <div className="relative">
-          {/* Animated ring around canvas */}
           <motion.div
             className="absolute inset-0 rounded-full"
             style={{
@@ -127,7 +142,6 @@ function LeftPanel() {
           <VoiceVisualizer />
         </div>
 
-        {/* Status badge */}
         <AnimatePresence mode="wait">
           <motion.div
             key={status}
@@ -158,17 +172,43 @@ function LeftPanel() {
       </div>
 
       {/* Bottom data strip */}
-      <div className="px-4 py-3 border-t border-cyan-900/20 grid grid-cols-2 gap-x-4 gap-y-2">
-        <DataReadout label="CONNEXION" value={isConnected ? "ACTIVE" : "COUPÉE"} color={isConnected ? "#00ff88" : "#ff3333"} />
-        <DataReadout label="PROTOCOLE" value="WS-8765" />
-        <DataReadout label="MÉMOIRE" value="20 MSG" />
-        <DataReadout label="MODÈLE" value="MISTRAL 7B" />
+      <div className="px-4 py-3 border-t border-cyan-900/20 flex flex-col gap-2">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+          <DataReadout label="CONNEXION" value={isConnected ? "ACTIVE" : "COUPÉE"} color={isConnected ? "#00ff88" : "#ff3333"} />
+          <DataReadout label="PROTOCOLE" value="WS-8765" />
+          <DataReadout label="MÉMOIRE" value="20 MSG" />
+          <DataReadout label="MODÈLE" value="MISTRAL 7B" />
+        </div>
+        {/* Clear history button */}
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={clearMessages}
+          className="mt-1 flex items-center justify-center gap-1.5 py-1.5 rounded text-[9px] tracking-widest transition-all"
+          style={{
+            color: "#ff444466",
+            border: "1px solid #ff444420",
+            background: "transparent",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.color = "#ff4444";
+            (e.currentTarget as HTMLElement).style.borderColor = "#ff444440";
+            (e.currentTarget as HTMLElement).style.background = "#ff444410";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.color = "#ff444466";
+            (e.currentTarget as HTMLElement).style.borderColor = "#ff444420";
+            (e.currentTarget as HTMLElement).style.background = "transparent";
+          }}
+        >
+          <Trash2 size={10} />
+          EFFACER L'HISTORIQUE
+        </motion.button>
       </div>
     </div>
   );
 }
 
-// ── Window controls ──────────────────────────────────────────────────────────
 function WindowControls() {
   const minimize = () => void getCurrentWindow().minimize();
   const maximize = async () => {
@@ -179,7 +219,6 @@ function WindowControls() {
 
   return (
     <div className="flex items-center gap-1">
-      {/* Minimize */}
       <motion.button
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
@@ -192,7 +231,6 @@ function WindowControls() {
         </svg>
       </motion.button>
 
-      {/* Maximize */}
       <motion.button
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
@@ -205,7 +243,6 @@ function WindowControls() {
         </svg>
       </motion.button>
 
-      {/* Close */}
       <motion.button
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
@@ -222,7 +259,6 @@ function WindowControls() {
   );
 }
 
-// ── Header ───────────────────────────────────────────────────────────────────
 function Header() {
   const isConnected = useJarvisStore((s) => s.isConnected);
   const timeRef = useRef<HTMLSpanElement>(null);
@@ -245,7 +281,6 @@ function Header() {
       className="relative z-10 flex items-center justify-between px-4 py-2 border-b border-cyan-900/30"
       data-tauri-drag-region
     >
-      {/* Left HUD info */}
       <div className="flex items-center gap-4" data-tauri-drag-region>
         <div className="flex items-center gap-2">
           <motion.div
@@ -264,7 +299,6 @@ function Header() {
         </span>
       </div>
 
-      {/* Center title */}
       <div className="absolute left-1/2 -translate-x-1/2 text-center pointer-events-none">
         <h1
           className="text-2xl font-bold tracking-[0.6em] text-cyan-400"
@@ -277,13 +311,12 @@ function Header() {
         </p>
       </div>
 
-      {/* Right: clock + version + settings + window controls */}
       <div className="flex items-center gap-3">
         <span className="text-[10px] text-blue-400/40 tracking-widest font-mono">
           <span ref={timeRef} />
         </span>
         <div className="w-px h-3 bg-cyan-900/40" />
-        <span className="text-[10px] text-cyan-400/60 tracking-widest">v1.0.0</span>
+        <span className="text-[10px] text-cyan-400/60 tracking-widest">v1.1.0</span>
         <div className="w-px h-3 bg-cyan-900/40" />
         <SettingsPanel />
         <div className="w-px h-3 bg-cyan-900/40" />
@@ -293,27 +326,22 @@ function Header() {
   );
 }
 
-// ── Right chat area decoration ────────────────────────────────────────────────
 function ChatAreaFrame() {
   return (
     <>
-      {/* Top-right corner accent */}
       <div className="absolute top-0 right-0 w-32 h-px bg-gradient-to-l from-cyan-400/30 to-transparent" />
       <div className="absolute top-0 right-0 w-px h-16 bg-gradient-to-b from-cyan-400/30 to-transparent" />
-      {/* Bottom-left corner accent */}
       <div className="absolute bottom-0 left-0 w-32 h-px bg-gradient-to-r from-cyan-400/20 to-transparent" />
     </>
   );
 }
 
-// ── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   return (
     <div className="h-screen flex flex-col relative overflow-hidden bg-[#010d1a]">
       <HexGrid />
       <ScanLine />
 
-      {/* Ambient glow spots */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full pointer-events-none"
         style={{ background: "radial-gradient(circle, #00d4ff08 0%, transparent 70%)", transform: "translate(-50%, -50%)" }} />
       <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full pointer-events-none"
@@ -324,7 +352,6 @@ export default function App() {
       <div className="flex-1 flex overflow-hidden relative z-10">
         <LeftPanel />
 
-        {/* Right chat area */}
         <div className="flex-1 flex flex-col relative">
           <ChatAreaFrame />
           <ChatPanel />
@@ -332,7 +359,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Global corner brackets */}
       <Corner pos="tl" />
       <Corner pos="tr" />
       <Corner pos="bl" />

@@ -13,6 +13,17 @@ const STATUS_COLORS: Record<string, [string, string]> = {
   error:      ["#ff3333", "#aa0000"],
 };
 
+// Reuse frequency buffers per analyser — avoids allocation every frame
+const _freqBuffers = new WeakMap<AnalyserNode, Uint8Array>();
+function getFreqBuffer(analyser: AnalyserNode): Uint8Array {
+  let buf = _freqBuffers.get(analyser);
+  if (!buf) {
+    buf = new Uint8Array(analyser.frequencyBinCount);
+    _freqBuffers.set(analyser, buf);
+  }
+  return buf;
+}
+
 function hex(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string, alpha: number) {
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -39,11 +50,10 @@ export function drawFrame({ canvas, analyser, status, time }: VisualizerOptions)
   const t = time * 0.001;
 
   const bufLen = analyser.frequencyBinCount;
-  const rawData = new Uint8Array(bufLen);
+  const rawData = getFreqBuffer(analyser);
   analyser.getByteFrequencyData(rawData);
   const rawAvg = rawData.slice(0, 80).reduce((s, v) => s + v, 0) / 80 / 255;
 
-  // Idle synthetic pulse — gives life to the visualizer even without real audio
   const idlePulse = status === "idle" || rawAvg < 0.02;
   const syntheticBase = idlePulse
     ? Math.abs(Math.sin(t * 1.1)) * 0.25 + Math.abs(Math.sin(t * 0.4 + 1)) * 0.12
@@ -55,13 +65,10 @@ export function drawFrame({ canvas, analyser, status, time }: VisualizerOptions)
         return Math.round((wave * pulse * 0.5 + syntheticBase * 0.3) * 180);
       })
     : rawData;
-  const avgAmp = idlePulse
-    ? syntheticBase
-    : rawAvg;
+  const avgAmp = idlePulse ? syntheticBase : rawAvg;
 
   ctx.clearRect(0, 0, W, H);
 
-  // — Background glow
   const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, cx);
   bg.addColorStop(0, `${col}18`);
   bg.addColorStop(0.6, `${col}06`);
@@ -69,13 +76,11 @@ export function drawFrame({ canvas, analyser, status, time }: VisualizerOptions)
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
-  // — Hex rings (decorative background)
   for (let ring = 1; ring <= 4; ring++) {
     const r = ring * 28 + Math.sin(t * 0.5 + ring) * 2;
     hex(ctx, cx, cy, r, col, 0.06 + ring * 0.02);
   }
 
-  // — Rotating outer arcs (3 arcs at different angles)
   for (let arc = 0; arc < 3; arc++) {
     const baseAngle = t * (0.4 + arc * 0.15) + (arc * Math.PI * 2) / 3;
     const r = 95 + arc * 8;
@@ -89,7 +94,6 @@ export function drawFrame({ canvas, analyser, status, time }: VisualizerOptions)
     ctx.restore();
   }
 
-  // — Main ring (pulsing)
   const mainR = 82 + avgAmp * 12;
   const ringGrd = ctx.createLinearGradient(cx - mainR, cy, cx + mainR, cy);
   ringGrd.addColorStop(0, `${col}00`);
@@ -104,7 +108,6 @@ export function drawFrame({ canvas, analyser, status, time }: VisualizerOptions)
   ctx.stroke();
   ctx.restore();
 
-  // — Inner glow fill
   const innerGrd = ctx.createRadialGradient(cx, cy, 0, cx, cy, mainR);
   innerGrd.addColorStop(0, `${col}22`);
   innerGrd.addColorStop(0.5, `${col}08`);
@@ -114,34 +117,26 @@ export function drawFrame({ canvas, analyser, status, time }: VisualizerOptions)
   ctx.arc(cx, cy, mainR, 0, Math.PI * 2);
   ctx.fill();
 
-  // — Radial frequency bars (outside ring)
   const bars = 72;
   for (let i = 0; i < bars; i++) {
     const angle = (i / bars) * Math.PI * 2 - Math.PI / 2;
     const amp = data[Math.floor((i / bars) * bufLen)] / 255;
-    const minLen = 4;
-    const maxLen = 36;
-    const barLen = minLen + amp * maxLen;
+    const barLen = 4 + amp * 36;
     const x1 = cx + Math.cos(angle) * (mainR + 3);
     const y1 = cy + Math.sin(angle) * (mainR + 3);
     const x2 = cx + Math.cos(angle) * (mainR + 3 + barLen);
     const y2 = cy + Math.sin(angle) * (mainR + 3 + barLen);
-
-    const alpha = 0.3 + amp * 0.7;
-    const barCol = amp > 0.6 ? col2 : col;
-
     ctx.save();
-    ctx.globalAlpha = alpha;
+    ctx.globalAlpha = 0.3 + amp * 0.7;
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
-    ctx.strokeStyle = barCol;
+    ctx.strokeStyle = amp > 0.6 ? col2 : col;
     ctx.lineWidth = amp > 0.5 ? 2 : 1;
     ctx.stroke();
     ctx.restore();
   }
 
-  // — Inner frequency bars (inside ring)
   const innerBars = 36;
   for (let i = 0; i < innerBars; i++) {
     const angle = (i / innerBars) * Math.PI * 2 - Math.PI / 2;
@@ -162,7 +157,6 @@ export function drawFrame({ canvas, analyser, status, time }: VisualizerOptions)
     ctx.restore();
   }
 
-  // — Arc reactor core (center hexagon + dot)
   const coreR = 12 + avgAmp * 5;
   hex(ctx, cx, cy, coreR, col, 0.8);
 
@@ -175,7 +169,6 @@ export function drawFrame({ canvas, analyser, status, time }: VisualizerOptions)
   ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
   ctx.fill();
 
-  // — Tick marks on main ring
   for (let i = 0; i < 24; i++) {
     const angle = (i / 24) * Math.PI * 2;
     const len = i % 6 === 0 ? 8 : i % 3 === 0 ? 5 : 3;
@@ -194,7 +187,6 @@ export function drawFrame({ canvas, analyser, status, time }: VisualizerOptions)
     ctx.restore();
   }
 
-  // — Scan line rotating
   const scanAngle = t * 1.2;
   ctx.save();
   ctx.globalAlpha = 0.15;

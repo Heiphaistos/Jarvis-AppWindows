@@ -1,6 +1,50 @@
 import { create } from "zustand";
 import type { JarvisStatus, Message, ServerEvent } from "../types";
 
+const MAX_MESSAGES = 200;
+const TTS_TIMEOUT_MS = 60_000;
+
+// Singleton AudioContext — one per app session
+let _audioCtx: AudioContext | null = null;
+function getAudioContext(): AudioContext {
+  if (!_audioCtx || _audioCtx.state === "closed") {
+    _audioCtx = new AudioContext();
+  }
+  if (_audioCtx.state === "suspended") {
+    void _audioCtx.resume();
+  }
+  return _audioCtx;
+}
+
+async function playTtsAudio(b64: string, onDone: () => void) {
+  let timeoutId: number | undefined;
+  try {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const ctx = getAudioContext();
+    const buffer = await ctx.decodeAudioData(bytes.buffer);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+
+    timeoutId = window.setTimeout(() => {
+      source.stop();
+      onDone();
+    }, TTS_TIMEOUT_MS);
+
+    source.onended = () => {
+      clearTimeout(timeoutId);
+      onDone();
+    };
+    source.start(0);
+  } catch (e) {
+    console.error("TTS playback error:", e);
+    clearTimeout(timeoutId);
+    onDone();
+  }
+}
+
 interface JarvisState {
   status: JarvisStatus;
   messages: Message[];
@@ -19,28 +63,8 @@ interface JarvisState {
   setTtsEnabled: (v: boolean) => void;
   setSelectedVoice: (v: string) => void;
   setWsSend: (fn: (event: object) => void) => void;
+  clearMessages: () => void;
   handleServerEvent: (event: ServerEvent) => void;
-}
-
-async function playTtsAudio(b64: string, onDone: () => void) {
-  try {
-    const binary = atob(b64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const audioCtx = new AudioContext();
-    const buffer = await audioCtx.decodeAudioData(bytes.buffer);
-    const source = audioCtx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(audioCtx.destination);
-    source.onended = () => {
-      audioCtx.close();
-      onDone();
-    };
-    source.start(0);
-  } catch (e) {
-    console.error("TTS playback error:", e);
-    onDone();
-  }
 }
 
 export const useJarvisStore = create<JarvisState>((set, get) => ({
@@ -59,9 +83,17 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
   setTtsEnabled: (ttsEnabled) => set({ ttsEnabled }),
   setSelectedVoice: (selectedVoice) => set({ selectedVoice }),
   setWsSend: (fn) => set({ wsSend: fn }),
+  clearMessages: () => {
+    set({ messages: [], pendingMessageId: null });
+    get().wsSend?.({ type: "clear_history", payload: {} });
+  },
 
   addMessage: (msg) =>
-    set((s) => ({ messages: [...s.messages, msg] })),
+    set((s) => ({
+      messages: s.messages.length >= MAX_MESSAGES
+        ? [...s.messages.slice(-MAX_MESSAGES + 1), msg]
+        : [...s.messages, msg],
+    })),
 
   appendToken: (messageId, token) =>
     set((s) => ({
@@ -100,7 +132,6 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
         break;
 
       case "stt_text":
-        // Show transcribed text as user message
         addMessage({
           id: crypto.randomUUID(),
           role: "user",

@@ -12,6 +12,8 @@ if TYPE_CHECKING:
 
 logger = get_logger("tts")
 
+MAX_TTS_CHARS = 1000
+
 
 class TTSManager:
     def __init__(self, settings: "Settings") -> None:
@@ -27,31 +29,41 @@ class TTSManager:
     def is_available(self) -> bool:
         return self._available
 
+    def set_voice(self, voice_path: Path) -> None:
+        self._voice = voice_path
+        self._available = self._piper_exe.exists() and voice_path.exists()
+        logger.info(f"Voix TTS changée: {voice_path.name}")
+
     async def synthesize(self, text: str) -> str | None:
         if not self._available:
             return None
 
-        def _run() -> bytes:
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-                tmp_path = Path(tmp.name)
+        text = text[:MAX_TTS_CHARS]
 
-            proc = subprocess.run(
-                [
-                    str(self._piper_exe),
-                    "--model",
-                    str(self._voice),
-                    "--output_file",
-                    str(tmp_path),
-                ],
-                input=text.encode("utf-8"),
-                capture_output=True,
-                timeout=30,
-            )
-            if proc.returncode != 0:
-                raise RuntimeError(f"Piper error: {proc.stderr.decode()}")
-            data = tmp_path.read_bytes()
-            tmp_path.unlink(missing_ok=True)
-            return data
+        def _run() -> bytes:
+            tmp_path: Path | None = None
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                    tmp_path = Path(tmp.name)
+
+                proc = subprocess.run(
+                    [
+                        str(self._piper_exe),
+                        "--model",
+                        str(self._voice),
+                        "--output_file",
+                        str(tmp_path),
+                    ],
+                    input=text.encode("utf-8"),
+                    capture_output=True,
+                    timeout=30,
+                )
+                if proc.returncode != 0:
+                    raise RuntimeError(f"Piper error: {proc.stderr.decode()}")
+                return tmp_path.read_bytes()
+            finally:
+                if tmp_path is not None:
+                    tmp_path.unlink(missing_ok=True)
 
         try:
             wav_bytes = await asyncio.to_thread(_run)

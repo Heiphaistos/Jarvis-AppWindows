@@ -1,5 +1,7 @@
 from __future__ import annotations
 import asyncio
+import json
+import re
 from typing import AsyncGenerator, TYPE_CHECKING
 from utils.logger import get_logger
 
@@ -16,14 +18,42 @@ SYSTEM_PROMPT = (
     "3. Tu t'adresses à l'utilisateur en l'appelant 'Monsieur'.\n"
     "4. Tes réponses sont concises et directes. Pas de bavardage inutile.\n"
     "5. Si on te demande de répondre dans une autre langue, tu refuses poliment en français.\n"
+    "6. Pour exécuter une action système, utilise exactement ce format (rien d'autre sur la ligne) :\n"
+    "   <JARVIS_TOOL>{\"name\": \"nom_outil\", \"args\": {\"param\": \"valeur\"}}</JARVIS_TOOL>\n"
+    "OUTILS DISPONIBLES :\n"
+    "  open_application(name) — name ∈ {chrome, firefox, notepad, explorer, calculator, vscode, terminal}\n"
+    "  kill_application(name) — ferme un processus autorisé\n"
+    "  delete_temp_files() — supprime les fichiers temporaires\n"
+    "  get_system_info() — CPU, RAM, GPU, disque\n"
+    "  create_file(path, content) — crée un fichier dans le home\n"
+    "  move_file(src, dst) — déplace un fichier dans le home\n"
     "Commence directement ta réponse sans préambule."
 )
+
+_TOOL_CALL_RE = re.compile(r"<JARVIS_TOOL>(.*?)</JARVIS_TOOL>", re.DOTALL)
+
+
+def parse_tool_call(response: str) -> tuple[str, dict] | None:
+    """Extract tool name and args from a JARVIS_TOOL marker, or None if absent."""
+    m = _TOOL_CALL_RE.search(response)
+    if not m:
+        return None
+    try:
+        payload = json.loads(m.group(1).strip())
+        name = str(payload.get("name", ""))
+        args = dict(payload.get("args", {}))
+        if name:
+            return name, args
+    except (json.JSONDecodeError, AttributeError):
+        logger.warning(f"Tool call JSON invalide: {m.group(1)!r}")
+    return None
 
 
 class LLMManager:
     def __init__(self, settings: "Settings") -> None:
         self._settings = settings
         self._llm: object | None = None
+        self._lock = asyncio.Lock()
 
     def load(self) -> None:
         model_path = self._settings.model_path
@@ -55,7 +85,9 @@ class LLMManager:
         return self._llm is not None
 
     async def stream(
-        self, messages: list[dict[str, str]]
+        self,
+        messages: list[dict[str, str]],
+        max_tokens: int = 512,
     ) -> AsyncGenerator[str, None]:
         if self._llm is None:
             yield "Je suis désolé Monsieur, le modèle LLM n'est pas chargé. Veuillez placer un fichier GGUF dans server/models/."
@@ -66,13 +98,14 @@ class LLMManager:
         def _generate() -> object:
             return self._llm.create_chat_completion(  # type: ignore[union-attr]
                 messages=full_messages,
-                max_tokens=1024,
+                max_tokens=max_tokens,
                 temperature=0.7,
                 stream=True,
             )
 
-        gen = await asyncio.to_thread(_generate)
-        for chunk in gen:  # type: ignore[union-attr]
-            delta = chunk["choices"][0]["delta"]
-            if content := delta.get("content"):
-                yield content
+        async with self._lock:
+            gen = await asyncio.to_thread(_generate)
+            for chunk in gen:  # type: ignore[union-attr]
+                delta = chunk["choices"][0]["delta"]
+                if content := delta.get("content"):
+                    yield content

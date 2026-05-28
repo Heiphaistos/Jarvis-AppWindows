@@ -6,7 +6,6 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 # Inject CUDA 12 DLL paths so llama-cpp-python can find cublas64_12.dll
-# (needed when only the driver is installed, not the full CUDA Toolkit)
 def _add_cuda_dll_dirs() -> None:
     if sys.platform != "win32":
         return
@@ -25,10 +24,10 @@ def _add_cuda_dll_dirs() -> None:
 _add_cuda_dll_dirs()
 
 from fastapi import FastAPI, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
 from utils.logger import get_logger
 from utils.config import settings
 from core.llm import LLMManager
-from core.memory import ContextMemory
 from core.stt import STTManager
 from core.tts import TTSManager
 from tools.registry import ToolRegistry
@@ -38,7 +37,6 @@ from api.websocket import websocket_handler
 logger = get_logger("main")
 
 llm = LLMManager(settings)
-memory = ContextMemory(settings.max_context_messages)
 stt = STTManager(settings)
 tts = TTSManager(settings)
 tools = ToolRegistry()
@@ -57,12 +55,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("JARVIS arrêté.")
 
 
-from fastapi.middleware.cors import CORSMiddleware
-
 app = FastAPI(title="JARVIS Core", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:1420", "http://127.0.0.1:1420", "tauri://localhost"],
     allow_methods=["GET"],
     allow_headers=["*"],
 )
@@ -71,7 +67,10 @@ app.include_router(router, prefix="/api")
 
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket) -> None:
-    await websocket_handler(ws, llm, memory, stt, tts, tools)
+    await websocket_handler(
+        ws, llm, stt, tts, tools,
+        max_context_messages=settings.max_context_messages,
+    )
 
 
 if __name__ == "__main__":

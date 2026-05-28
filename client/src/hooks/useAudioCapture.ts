@@ -1,4 +1,5 @@
 import { useRef, useCallback } from "react";
+import { useJarvisStore } from "../stores/jarvisStore";
 import type { ClientEvent } from "../types";
 
 const SAMPLE_RATE = 16000;
@@ -33,6 +34,7 @@ export function useAudioCapture(send: (e: ClientEvent) => void) {
       processorRef.current = processor;
     } catch (err) {
       console.error("Microphone access denied:", err);
+      useJarvisStore.getState().setStatus("error");
       throw err;
     }
   }, [send]);
@@ -44,7 +46,6 @@ export function useAudioCapture(send: (e: ClientEvent) => void) {
     streamRef.current = null;
     contextRef.current = null;
     processorRef.current = null;
-    // Flush remaining audio on server side
     send({ type: "mic_stop", payload: {} });
   }, [send]);
 

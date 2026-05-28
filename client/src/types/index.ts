@@ -32,4 +32,7 @@ export type ClientEvent =
   | { type: "text_query"; payload: { text: string } }
   | { type: "audio_chunk"; payload: AudioChunk }
   | { type: "mic_stop"; payload: Record<string, never> }
-  | { type: "tts_done"; payload: Record<string, never> };
+  | { type: "tts_done"; payload: Record<string, never> }
+  | { type: "set_tts"; payload: { enabled: boolean } }
+  | { type: "set_voice"; payload: { voice: string } }
+  | { type: "clear_history"; payload: Record<string, never> };

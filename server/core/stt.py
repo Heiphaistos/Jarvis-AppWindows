@@ -9,11 +9,8 @@ if TYPE_CHECKING:
 
 logger = get_logger("stt")
 
-# Minimum RMS amplitude to consider audio as speech (not silence/noise)
 RMS_THRESHOLD = 0.005
-# Whisper no-speech probability threshold — discard hallucinated segments
 NO_SPEECH_THRESHOLD = 0.6
-# Known Whisper hallucination phrases to discard
 HALLUCINATION_PHRASES = {
     "amara.org", "sous-titres", "sous-titrage", "transcription",
     "merci d'avoir regardé", "à bientôt", "sous-titré par",
@@ -25,6 +22,7 @@ class STTManager:
     def __init__(self, settings: "Settings") -> None:
         self._settings = settings
         self._model: object | None = None
+        self._lock = asyncio.Lock()
 
     def load(self) -> None:
         try:
@@ -57,17 +55,16 @@ class STTManager:
             audio = np.concatenate(
                 [np.array(c, dtype=np.float32) for c in chunks]
             )
-            # Silence gate — skip transcription if audio is just noise
             rms = float(np.sqrt(np.mean(audio ** 2)))
             if rms < RMS_THRESHOLD:
                 logger.debug(f"Audio ignoré (silence) — RMS={rms:.4f}")
                 return ""
 
-            segments, info = self._model.transcribe(  # type: ignore[union-attr]
+            segments, _ = self._model.transcribe(  # type: ignore[union-attr]
                 audio,
                 language="fr",
                 beam_size=5,
-                vad_filter=True,          # built-in VAD from Silero
+                vad_filter=True,
                 vad_parameters={"min_silence_duration_ms": 300},
                 no_speech_threshold=NO_SPEECH_THRESHOLD,
             )
@@ -87,4 +84,5 @@ class STTManager:
 
             return " ".join(result_parts)
 
-        return await asyncio.to_thread(_run)
+        async with self._lock:
+            return await asyncio.to_thread(_run)
