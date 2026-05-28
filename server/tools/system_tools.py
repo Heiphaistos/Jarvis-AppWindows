@@ -24,7 +24,9 @@ ALLOWED_KILL_APPS: frozenset[str] = frozenset({
 
 
 def open_application(name: str) -> str:
-    key = name.lower().strip()
+    if not isinstance(name, str) or not name.strip():
+        return "Erreur: nom d'application invalide (chaîne non vide requise)."
+    key = name.strip().lower()
     if key not in ALLOWED_APPS:
         available = ", ".join(ALLOWED_APPS.keys())
         return f"Application '{name}' non autorisée. Disponibles: {available}"
@@ -34,14 +36,15 @@ def open_application(name: str) -> str:
 
 
 def kill_application(name: str) -> str:
-    if not name or not name.strip():
-        return "Erreur: nom de processus requis."
+    if not isinstance(name, str) or not name.strip():
+        return "Erreur: nom d'application invalide."
+    name = name.strip().lower()
     killed = 0
     for proc in psutil.process_iter(["name"]):
         proc_name = (proc.info.get("name") or "").lower()
         if proc_name not in ALLOWED_KILL_APPS:
             continue
-        if name.lower() in proc_name:
+        if name in proc_name:
             proc.terminate()
             killed += 1
     if killed:

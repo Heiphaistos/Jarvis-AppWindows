@@ -12,6 +12,10 @@ from core.stt import STTManager
 from core.tts import TTSManager
 from tools.registry import ToolRegistry
 
+from utils.rate_limiter import RateLimiter
+
+_rate_limiter = RateLimiter()
+
 logger = get_logger("websocket")
 
 CHUNK_THRESHOLD = 8
@@ -192,6 +196,7 @@ async def websocket_handler(
         return
 
     await manager.connect(ws)
+    ws_id = id(ws)
 
     # Notify client of server capabilities immediately on connect
     await manager.send(ws, "server_status", {
@@ -220,6 +225,9 @@ async def websocket_handler(
             payload: dict = event.get("payload", {})
 
             if event_type == "text_query":
+                if not _rate_limiter.allow_text(ws_id):
+                    await manager.send(ws, "error", {"message": "Trop de requêtes. Patientez une minute."})
+                    continue
                 text = str(payload.get("text", "")).strip()
                 if not text:
                     continue
@@ -227,6 +235,8 @@ async def websocket_handler(
                 await handle_text_query(ws, text, llm, memory, tts, tools, tts_enabled)
 
             elif event_type == "audio_chunk":
+                if not _rate_limiter.allow_audio(ws_id):
+                    continue
                 if stt.is_available:
                     chunk_data = payload.get("data")
                     if not isinstance(chunk_data, list):
@@ -280,6 +290,7 @@ async def websocket_handler(
                 logger.warning(f"Type d'événement inconnu: {event_type}")
 
     except WebSocketDisconnect:
+        _rate_limiter.cleanup(ws_id)
         manager.disconnect(ws)
     except Exception as e:
         logger.error(f"Erreur WebSocket: {e}", exc_info=True)
