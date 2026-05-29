@@ -306,6 +306,21 @@ async def websocket_handler(
     await manager.connect(ws)
     ws_id = id(ws)
 
+    from core.monitor import subscribe as _monitor_subscribe, unsubscribe as _monitor_unsubscribe
+    alert_queue = _monitor_subscribe()
+
+    async def _forward_alerts():
+        while True:
+            try:
+                alert = await asyncio.wait_for(alert_queue.get(), timeout=1.0)
+                await manager.send(ws, alert["type"], alert["payload"])
+            except asyncio.TimeoutError:
+                continue
+            except Exception:
+                break
+
+    alert_task = asyncio.create_task(_forward_alerts())
+
     # Notify client of server capabilities immediately on connect
     await manager.send(ws, "server_status", {
         "llm": llm.is_available,
@@ -398,14 +413,16 @@ async def websocket_handler(
                 logger.warning(f"Type d'événement inconnu: {event_type}")
 
     except WebSocketDisconnect:
-        _rate_limiter.cleanup(ws_id)
-        manager.disconnect(ws)
+        pass
     except Exception as e:
         logger.error(f"Erreur WebSocket: {e}", exc_info=True)
-        _rate_limiter.cleanup(ws_id)
         audio_buffer.clear()
         try:
             await manager.send(ws, "error", {"message": "Erreur interne du serveur."})
         except Exception:
             pass
+    finally:
+        alert_task.cancel()
+        _monitor_unsubscribe(alert_queue)
+        _rate_limiter.cleanup(ws_id)
         manager.disconnect(ws)

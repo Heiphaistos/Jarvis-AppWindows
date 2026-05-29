@@ -30,6 +30,7 @@ from utils.config import settings
 from core.llm import LLMManager
 from core.stt import STTManager
 from core.tts import TTSManager
+from core.monitor import run_monitor as _run_monitor
 from tools.registry import ToolRegistry
 from api.routes import router
 from api.websocket import websocket_handler
@@ -54,7 +55,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Chargement STT Whisper...")
     await asyncio.to_thread(stt.load)
     logger.info(f"JARVIS prêt — LLM: {llm.is_available} | STT: {stt.is_available} | TTS: {tts.is_available}")
+    monitor_task = asyncio.create_task(_run_monitor())
     yield
+    monitor_task.cancel()
+    try:
+        await monitor_task
+    except asyncio.CancelledError:
+        pass
     llm.unload()
     logger.info("JARVIS arrêté.")
 

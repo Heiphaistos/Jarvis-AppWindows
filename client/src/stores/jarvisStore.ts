@@ -291,6 +291,17 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
           llmAvailable: event.payload.llm,
         });
         break;
+
+      case "system_alert": {
+        const { message } = event.payload as { alert_type: string; message: string };
+        get().addMessage({
+          id: crypto.randomUUID(),
+          role: "system",
+          content: message,
+          timestamp: Date.now(),
+        });
+        break;
+      }
     }
   },
 }));

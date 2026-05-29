@@ -28,7 +28,8 @@ export type ServerEvent =
   | { type: "stt_text"; payload: { text: string } }
   | { type: "tool_result"; payload: { tool: string; result: string } }
   | { type: "error"; payload: { message: string } }
-  | { type: "server_status"; payload: { llm: boolean; stt: boolean; tts: boolean } };
+  | { type: "server_status"; payload: { llm: boolean; stt: boolean; tts: boolean } }
+  | { type: "system_alert"; payload: { alert_type: string; message: string } };
 
 export type ClientEvent =
   | { type: "text_query"; payload: { text: string } }
