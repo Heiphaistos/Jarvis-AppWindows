@@ -21,7 +21,13 @@ logger = get_logger("websocket")
 CHUNK_THRESHOLD = 8
 MAX_PAYLOAD_BYTES = 2 * 1024 * 1024   # 2 MB — audio chunk upper bound
 MAX_TEXT_CHARS = 2000
-ALLOWED_ORIGINS = {"http://localhost:1420", "http://127.0.0.1:1420", "tauri://localhost"}
+ALLOWED_ORIGINS = {
+    "http://localhost:1420",    # dev Vite
+    "http://127.0.0.1:1420",    # dev Vite alt
+    "tauri://localhost",         # Tauri v1 production
+    "http://tauri.localhost",    # Tauri v2 production (WebView2)
+    "https://tauri.localhost",   # Tauri v2 HTTPS variant
+}
 
 _SENTENCE_BOUNDARY = re.compile(r'(?<=[.!?…»!?"])\s+|(?<=\.\.\.)\s+')
 
