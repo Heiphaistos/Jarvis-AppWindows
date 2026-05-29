@@ -47,21 +47,29 @@ from core.persistent_memory import get_memory as _init_memory
 _init_memory()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    logger.info("Démarrage JARVIS Core...")
+async def _load_models_background() -> None:
+    """Charge LLM + STT en background — Uvicorn reste accessible pendant ce temps."""
     logger.info("Chargement du modèle LLM (peut prendre 30-60s)...")
     await asyncio.to_thread(llm.load)
     logger.info("Chargement STT Whisper...")
     await asyncio.to_thread(stt.load)
     logger.info(f"JARVIS prêt — LLM: {llm.is_available} | STT: {stt.is_available} | TTS: {tts.is_available}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    logger.info("Démarrage JARVIS Core...")
+    # Lancer le chargement en background pour que le port s'ouvre immédiatement
+    model_task = asyncio.create_task(_load_models_background())
     monitor_task = asyncio.create_task(_run_monitor())
-    yield
+    yield  # ← port 8765 ouvert ici, modèles chargent en arrière-plan
+    model_task.cancel()
     monitor_task.cancel()
-    try:
-        await monitor_task
-    except asyncio.CancelledError:
-        pass
+    for task in (model_task, monitor_task):
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
     llm.unload()
     logger.info("JARVIS arrêté.")
 
