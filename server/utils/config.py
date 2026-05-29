@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     port: int = 8765
 
     model_path: Path = MODELS_DIR / "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf"
-    n_ctx: int = 4096
+    n_ctx: int = 8192
     n_gpu_layers: int = _profile.n_gpu_layers
     n_threads: int = _profile.n_threads
 
@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     piper_exe: Path = MODELS_DIR / "piper" / "piper.exe"
     piper_voice: Path = MODELS_DIR / "piper" / "fr_FR-upmc-medium.onnx"
 
-    max_context_messages: int = 20
+    max_context_messages: int = 30
     hw_profile: str = _profile.name
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
