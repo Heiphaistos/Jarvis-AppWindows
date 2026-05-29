@@ -38,6 +38,9 @@ desktop.ini
 # Misc
 install_log.txt
 
+# Data utilisateur (mémoire persistante SQLite — ne pas versionner)
+server/data/
+
 # PyInstaller
 server/dist/
 server/build/
