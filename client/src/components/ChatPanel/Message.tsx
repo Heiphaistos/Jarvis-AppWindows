@@ -37,44 +37,138 @@ function splitCodeBlocks(raw: string): Segment[] {
   return segments;
 }
 
-// Inline renderer: bold, inline code, then raw text node
+// Inline renderer: bold, inline code, links, italic
 function renderInline(text: string): React.ReactNode[] {
-  const parts: React.ReactNode[] = [];
-  // Split on **bold** and `inline code`
-  const re = /(\*\*(.+?)\*\*|`([^`]+)`)/g;
+  const nodes: React.ReactNode[] = [];
+  const pattern = /(\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^)]+)\)|\*([^*\n]+)\*)/g;
   let last = 0;
-  let m: RegExpExecArray | null;
+  let match: RegExpExecArray | null;
   let key = 0;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) {
-      parts.push(text.slice(last, m.index));
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > last) {
+      nodes.push(text.slice(last, match.index));
     }
-    if (m[0].startsWith("**")) {
-      parts.push(<strong key={key++} className="font-bold text-cyan-100">{m[2]}</strong>);
-    } else {
-      parts.push(
+    const [full, , boldText, codeText, linkLabel, linkHref, italicText] = match;
+    if (full.startsWith("**")) {
+      nodes.push(
+        <strong key={key++} className="font-bold text-cyan-200">
+          {boldText}
+        </strong>
+      );
+    } else if (full.startsWith("`")) {
+      nodes.push(
         <code
           key={key++}
-          className="px-1 py-0.5 rounded text-[11px] font-mono"
-          style={{ background: "rgba(0,212,255,0.12)", color: "#7dd3fc" }}
+          className="bg-black/40 text-cyan-300 px-1 py-0.5 rounded text-xs font-mono border border-cyan-900/40"
         >
-          {m[3]}
+          {codeText}
         </code>
       );
+    } else if (full.startsWith("[")) {
+      nodes.push(
+        <a
+          key={key++}
+          href={linkHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-cyan-400 underline hover:text-cyan-200 transition-colors cursor-pointer"
+          onClick={(e) => {
+            e.preventDefault();
+          }}
+        >
+          {linkLabel}
+        </a>
+      );
+    } else if (full.startsWith("*")) {
+      nodes.push(
+        <em key={key++} className="italic text-cyan-100/80">
+          {italicText}
+        </em>
+      );
     }
-    last = m.index + m[0].length;
+    last = match.index + full.length;
   }
-  if (last < text.length) parts.push(text.slice(last));
-  return parts;
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes;
 }
 
-// Text segment renderer: handles bullet lists, numbered lists, paragraphs
+// Group consecutive table lines
+function groupTableLines(lines: string[]): Array<string | string[]> {
+  const result: Array<string | string[]> = [];
+  let tableBuffer: string[] = [];
+
+  for (const line of lines) {
+    if (line.trim().startsWith("|") && line.trim().endsWith("|")) {
+      tableBuffer.push(line);
+    } else {
+      if (tableBuffer.length >= 2) {
+        result.push(tableBuffer);
+      } else {
+        result.push(...tableBuffer);
+      }
+      tableBuffer = [];
+      result.push(line);
+    }
+  }
+  if (tableBuffer.length >= 2) result.push(tableBuffer);
+  else result.push(...tableBuffer);
+  return result;
+}
+
+function renderTable(tableLines: string[], segKey: number, tableKey: number): React.ReactElement {
+  const rows = tableLines
+    .filter((l) => !/^\|[-| :]+\|$/.test(l.trim()))
+    .map((l) =>
+      l
+        .split("|")
+        .filter((c) => c !== "")
+        .map((c) => c.trim())
+    );
+
+  if (rows.length === 0) return <React.Fragment key={`tbl-${segKey}-${tableKey}`} />;
+  const [header, ...body] = rows;
+
+  return (
+    <div key={`tbl-${segKey}-${tableKey}`} className="overflow-x-auto my-2">
+      <table className="text-xs border-collapse w-full">
+        <thead>
+          <tr>
+            {header.map((cell, ci) => (
+              <th
+                key={ci}
+                className="border border-cyan-900/40 bg-cyan-950/50 px-2 py-1 text-cyan-300 text-left font-semibold"
+              >
+                {renderInline(cell)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {body.map((row, ri) => (
+            <tr key={ri} className={ri % 2 === 0 ? "bg-black/20" : "bg-black/10"}>
+              {row.map((cell, ci) => (
+                <td key={ci} className="border border-cyan-900/30 px-2 py-1 text-cyan-100/80">
+                  {renderInline(cell)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Text segment renderer: handles headings, blockquotes, hr, bullet lists, numbered lists, tables, paragraphs
 function renderTextSegment(text: string, segKey: number): React.ReactNode {
-  const lines = text.split("\n");
+  const rawLines = text.split("\n");
+  const grouped = groupTableLines(rawLines);
   const nodes: React.ReactNode[] = [];
   let ulItems: string[] = [];
   let olItems: string[] = [];
   let key = 0;
+  let tableCount = 0;
 
   const flushUl = () => {
     if (ulItems.length === 0) return;
@@ -82,7 +176,10 @@ function renderTextSegment(text: string, segKey: number): React.ReactNode {
       <ul key={`ul-${segKey}-${key++}`} className="my-1 flex flex-col gap-0.5">
         {ulItems.map((item, i) => (
           <li key={i} className="flex items-start gap-2">
-            <span className="mt-[7px] flex-shrink-0 w-1 h-1 rounded-full" style={{ background: "rgba(0,212,255,0.6)" }} />
+            <span
+              className="mt-[7px] flex-shrink-0 w-1 h-1 rounded-full"
+              style={{ background: "rgba(0,212,255,0.6)" }}
+            />
             <span className="text-cyan-50/90">{renderInline(item)}</span>
           </li>
         ))}
@@ -97,7 +194,12 @@ function renderTextSegment(text: string, segKey: number): React.ReactNode {
       <ol key={`ol-${segKey}-${key++}`} className="my-1 flex flex-col gap-0.5">
         {olItems.map((item, i) => (
           <li key={i} className="flex items-start gap-2">
-            <span className="flex-shrink-0 font-mono text-[11px]" style={{ color: "rgba(0,212,255,0.6)", minWidth: "1rem" }}>{i + 1}.</span>
+            <span
+              className="flex-shrink-0 font-mono text-[11px]"
+              style={{ color: "rgba(0,212,255,0.6)", minWidth: "1rem" }}
+            >
+              {i + 1}.
+            </span>
             <span className="text-cyan-50/90">{renderInline(item)}</span>
           </li>
         ))}
@@ -106,22 +208,74 @@ function renderTextSegment(text: string, segKey: number): React.ReactNode {
     olItems = [];
   };
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+  for (let i = 0; i < grouped.length; i++) {
+    const item = grouped[i];
+
+    // Table block
+    if (Array.isArray(item)) {
+      flushUl();
+      flushOl();
+      nodes.push(renderTable(item, segKey, tableCount++));
+      continue;
+    }
+
+    const line = item as string;
     const bulletMatch = line.match(/^[-*]\s+(.+)$/);
     const numberedMatch = line.match(/^\d+\.\s+(.+)$/);
 
-    if (bulletMatch) {
+    // Headings
+    if (line.startsWith("### ")) {
+      flushUl();
+      flushOl();
+      nodes.push(
+        <h3 key={`h3-${segKey}-${key++}`} className="text-sm font-bold text-cyan-300 mt-3 mb-1 border-b border-cyan-900/30 pb-0.5">
+          {renderInline(line.slice(4))}
+        </h3>
+      );
+    } else if (line.startsWith("## ")) {
+      flushUl();
+      flushOl();
+      nodes.push(
+        <h2 key={`h2-${segKey}-${key++}`} className="text-base font-bold text-cyan-200 mt-4 mb-1 border-b border-cyan-800/40 pb-1">
+          {renderInline(line.slice(3))}
+        </h2>
+      );
+    } else if (line.startsWith("# ")) {
+      flushUl();
+      flushOl();
+      nodes.push(
+        <h1 key={`h1-${segKey}-${key++}`} className="text-lg font-bold text-white mt-4 mb-2">
+          {renderInline(line.slice(2))}
+        </h1>
+      );
+    // Blockquote
+    } else if (line.startsWith("> ")) {
+      flushUl();
+      flushOl();
+      nodes.push(
+        <blockquote key={`bq-${segKey}-${key++}`} className="border-l-2 border-cyan-500/50 pl-3 italic text-cyan-100/60 my-1 text-sm">
+          {renderInline(line.slice(2))}
+        </blockquote>
+      );
+    // Horizontal rule
+    } else if (/^[-*_]{3,}$/.test(line.trim())) {
+      flushUl();
+      flushOl();
+      nodes.push(<hr key={`hr-${segKey}-${key++}`} className="border-cyan-900/40 my-3" />);
+    // Bullet list
+    } else if (bulletMatch) {
       flushOl();
       ulItems.push(bulletMatch[1]);
+    // Numbered list
     } else if (numberedMatch) {
       flushUl();
       olItems.push(numberedMatch[1]);
+    // Empty line or paragraph
     } else {
       flushUl();
       flushOl();
       if (line.trim() === "") {
-        if (i > 0 && i < lines.length - 1) {
+        if (i > 0 && i < grouped.length - 1) {
           nodes.push(<div key={`br-${segKey}-${key++}`} className="h-1" />);
         }
       } else {
@@ -178,11 +332,18 @@ function MarkdownContent({ content }: { content: string }) {
 export function Message({ message }: Props) {
   const isUser = message.role === "user";
   const isSystem = message.role === "system";
+  const [copied, setCopied] = React.useState(false);
   const time = new Date(message.timestamp).toLocaleTimeString("fr-FR", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
   });
+
+  const handleCopy = () => {
+    void navigator.clipboard.writeText(message.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   if (isSystem) {
     return (
@@ -224,7 +385,7 @@ export function Message({ message }: Props) {
 
         {/* Bubble */}
         <div
-          className="relative px-4 py-2.5 text-sm leading-relaxed"
+          className="relative group px-4 py-2.5 text-sm leading-relaxed"
           style={
             isUser
               ? {
@@ -254,6 +415,26 @@ export function Message({ message }: Props) {
           <div className="text-right text-[9px] text-blue-400/35 mt-1.5 font-mono tracking-widest">
             {time}
           </div>
+
+          {/* Copy button (JARVIS messages only) */}
+          {!isUser && (
+            <button
+              onClick={handleCopy}
+              title="Copier le message"
+              className="absolute top-1 right-1 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity p-1 rounded bg-black/30 text-cyan-600 hover:text-cyan-300"
+            >
+              {copied ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+              )}
+            </button>
+          )}
         </div>
       </div>
 

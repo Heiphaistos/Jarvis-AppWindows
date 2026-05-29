@@ -8,6 +8,7 @@ export function ChatPanel() {
   const messages = useJarvisStore((s) => s.messages);
   const pendingMessageId = useJarvisStore((s) => s.pendingMessageId);
   const status = useJarvisStore((s) => s.status);
+  const exportConversation = useJarvisStore((s) => s.exportConversation);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,6 +41,23 @@ export function ChatPanel() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {messages.length > 0 && (
+        <div className="flex justify-end px-3 pt-1">
+          <button
+            onClick={exportConversation}
+            title="Exporter la conversation en Markdown"
+            className="text-xs text-cyan-800 hover:text-cyan-400 transition-colors flex items-center gap-1"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Exporter
+          </button>
+        </div>
+      )}
 
       {messages.map((msg) => (
         <Message key={msg.id} message={msg} />

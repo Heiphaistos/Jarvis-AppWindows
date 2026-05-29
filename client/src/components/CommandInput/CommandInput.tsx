@@ -84,6 +84,7 @@ export function CommandInput() {
 
         <input
           ref={inputRef}
+          data-jarvis-input
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}

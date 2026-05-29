@@ -390,7 +390,7 @@ function Header() {
           <span ref={timeRef} />
         </span>
         <div className="w-px h-3 bg-cyan-900/40" />
-        <span className="text-[10px] text-cyan-400/60 tracking-widest">v2.0.0</span>
+        <span className="text-[10px] text-cyan-400/60 tracking-widest">v3.0.0</span>
         <div className="w-px h-3 bg-cyan-900/40" />
         <SettingsPanel />
         <div className="w-px h-3 bg-cyan-900/40" />
@@ -411,6 +411,25 @@ function ChatAreaFrame() {
 }
 
 export default function App() {
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        const input = document.querySelector<HTMLInputElement>("[data-jarvis-input]");
+        input?.focus();
+      }
+      if (e.key === "Escape") {
+        const input = document.querySelector<HTMLInputElement>("[data-jarvis-input]");
+        if (input && document.activeElement === input) {
+          input.value = "";
+          input.blur();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
+
   return (
     <div className="h-screen flex flex-col relative overflow-hidden bg-[#010d1a]">
       <HexGrid />

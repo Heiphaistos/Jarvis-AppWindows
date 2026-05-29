@@ -161,6 +161,7 @@ interface JarvisState {
   setSelectedVoice: (v: string) => void;
   setWsSend: (fn: (event: object) => void) => void;
   clearMessages: () => void;
+  exportConversation: () => void;
   handleServerEvent: (event: ServerEvent) => void;
 }
 
@@ -189,6 +190,36 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
     clearTtsQueue();
     set({ messages: [], pendingMessageId: null });
     get().wsSend?.({ type: "clear_history", payload: {} });
+  },
+
+  exportConversation: () => {
+    const messages = get().messages;
+    if (messages.length === 0) return;
+    const lines: string[] = [
+      `# Conversation JARVIS — ${new Date().toLocaleDateString("fr-FR")}`,
+      `\nExportée le ${new Date().toLocaleString("fr-FR")}`,
+      "\n---\n",
+    ];
+    for (const msg of messages) {
+      const roleLabel =
+        msg.role === "user"
+          ? "**Vous**"
+          : msg.role === "assistant"
+          ? "**JARVIS**"
+          : "**Système**";
+      const time = new Date(msg.timestamp).toLocaleTimeString("fr-FR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      lines.push(`${roleLabel} *(${time})*\n\n${msg.content}\n\n---\n`);
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `jarvis-${new Date().toISOString().slice(0, 10)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
   },
 
   addMessage: (msg) =>
