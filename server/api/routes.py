@@ -37,7 +37,7 @@ class GmailStatusResponse(BaseModel):
 
 @router.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
-    return HealthResponse(status="ok", version="2.0.0")
+    return HealthResponse(status="ok", version="3.0.0")
 
 
 @router.get("/memories/count")

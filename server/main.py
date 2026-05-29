@@ -54,6 +54,13 @@ async def _load_models_background() -> None:
     logger.info("Chargement STT Whisper...")
     await asyncio.to_thread(stt.load)
     logger.info(f"JARVIS prêt — LLM: {llm.is_available} | STT: {stt.is_available} | TTS: {tts.is_available}")
+    # Notifier tous les clients WebSocket connectés que les modèles sont prêts
+    from core.monitor import broadcast_direct as _broadcast_direct
+    _broadcast_direct("server_status", {
+        "llm": llm.is_available,
+        "stt": stt.is_available,
+        "tts": tts.is_available,
+    })
 
 
 @asynccontextmanager

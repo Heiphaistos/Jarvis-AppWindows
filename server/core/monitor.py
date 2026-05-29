@@ -28,6 +28,22 @@ def unsubscribe(q: asyncio.Queue) -> None:
     _subscribers.discard(q)
 
 
+def broadcast_direct(event_type: str, payload: dict) -> None:
+    """Envoie immédiatement un événement à tous les abonnés, sans cooldown.
+
+    Utilisé par main.py pour notifier que les modèles sont prêts.
+    """
+    item = {"type": event_type, "payload": payload}
+    dead: set[asyncio.Queue] = set()
+    for q in list(_subscribers):
+        try:
+            q.put_nowait(item)
+        except asyncio.QueueFull:
+            dead.add(q)
+    for q in dead:
+        _subscribers.discard(q)
+
+
 async def _broadcast(alert_type: str, message: str) -> None:
     """Envoie une alerte à tous les abonnés en respectant le cooldown."""
     now = time.monotonic()
