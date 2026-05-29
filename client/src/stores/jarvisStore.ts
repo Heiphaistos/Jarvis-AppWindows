@@ -281,6 +281,10 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
         });
         break;
 
+      case "tool_result":
+        // Les tool_results sont gérés silencieusement (le LLM en parle dans sa réponse)
+        break;
+
       case "server_status":
         set({
           sttAvailable: event.payload.stt,

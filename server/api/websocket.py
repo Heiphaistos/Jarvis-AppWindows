@@ -6,7 +6,7 @@ import uuid
 from fastapi import WebSocket, WebSocketDisconnect
 from utils.logger import get_logger
 from utils.config import MODELS_DIR
-from core.llm import LLMManager, parse_tool_call
+from core.llm import LLMManager, parse_tool_call, _TOOL_CALL_RE
 from core.memory import ContextMemory
 from core.stt import STTManager
 from core.tts import TTSManager
@@ -30,6 +30,106 @@ ALLOWED_ORIGINS = {
 }
 
 _SENTENCE_BOUNDARY = re.compile(r'(?<=[.!?…»!?"])\s+|(?<=\.\.\.)\s+')
+
+MAX_AGENT_ITERATIONS = 5
+
+
+async def _agent_loop(
+    ws: "WebSocket",
+    llm: "LLMManager",
+    tts: "TTSManager",
+    tools: "ToolRegistry",
+    messages: list[dict],
+    tts_enabled: bool,
+    message_id: str,
+    tts_queue: "asyncio.Queue[str]",
+) -> str:
+    """Boucle agent : LLM → tool → LLM → ... → réponse finale (max 5 itérations)."""
+    accumulated = ""
+
+    for _iteration in range(MAX_AGENT_ITERATIONS):
+        full_response = ""
+        sentence_buf = ""
+        in_tool_tag = False
+
+        async for token in llm.stream(messages):
+            full_response += token
+            # Détecter début de balise tool → bufferiser sans envoyer
+            if "<JARVIS_TOOL>" in full_response and "</JARVIS_TOOL>" not in full_response:
+                in_tool_tag = True
+            if in_tool_tag:
+                if "</JARVIS_TOOL>" in full_response:
+                    in_tool_tag = False
+                    # Balise complète → on arrête le streaming ici
+                    break
+                continue  # Bufferiser, pas encore au client
+
+            # Token normal → envoyer au client
+            await manager.send(ws, "token", {"token": token, "messageId": message_id})
+            accumulated += token
+
+            # Buffer TTS phrase par phrase
+            if tts_enabled:
+                sentence_buf += token
+                m = _SENTENCE_BOUNDARY.search(sentence_buf)
+                if m and len(sentence_buf.strip()) > 15:
+                    phrase = sentence_buf[: m.start() + 1].strip()
+                    sentence_buf = sentence_buf[m.end():]
+                    if phrase:
+                        await tts_queue.put(phrase)
+
+        # Vérifier si tool call présent dans la réponse complète
+        tool_result = parse_tool_call(full_response)
+        if tool_result:
+            name, args = tool_result
+            logger.info(f"Agent loop iteration {_iteration + 1}: tool call {name}({args})")
+            # Notifier le client (outil en cours)
+            await manager.send(ws, "tool_result", {"tool": name, "result": f"⚙️ Exécution de {name}..."})
+            # Exécuter l'outil dans un thread (opération bloquante possible)
+            try:
+                result = await asyncio.to_thread(tools.execute, name, **args)
+            except Exception as e:
+                result = f"Erreur outil {name}: {e}"
+                logger.error(f"Tool execution error: {e}", exc_info=True)
+
+            # Envoyer le résultat au client
+            await manager.send(ws, "tool_result", {"tool": name, "result": str(result)[:300]})
+
+            # Extraire le texte visible avant la balise tool (s'il y en a)
+            visible = _TOOL_CALL_RE.sub("", full_response).strip()
+            if visible and visible not in accumulated:
+                await manager.send(ws, "token", {"token": visible, "messageId": message_id})
+                accumulated += visible
+
+            # Réinjecter dans le contexte pour la prochaine itération LLM
+            messages = messages + [
+                {"role": "assistant", "content": full_response},
+                {
+                    "role": "user",
+                    "content": (
+                        f"[RÉSULTAT OUTIL {name}]\n{result}\n\n"
+                        "Continue ta réponse en français en tenant compte de ce résultat. "
+                        "Ne répète pas ce que tu viens de faire."
+                    ),
+                },
+            ]
+            continue  # Prochaine itération
+
+        else:
+            # Pas de tool → réponse finale
+            # Envoyer ce qui n'a pas encore été streamé
+            remaining = _TOOL_CALL_RE.sub("", full_response).strip()
+            if remaining and remaining not in accumulated:
+                await manager.send(ws, "token", {"token": remaining, "messageId": message_id})
+                accumulated += remaining
+
+            # Flush le dernier buffer TTS
+            if tts_enabled and sentence_buf.strip():
+                await tts_queue.put(sentence_buf.strip())
+
+            break  # Réponse finale → sortir de la boucle
+
+    return accumulated
 
 
 class ConnectionManager:
@@ -139,30 +239,32 @@ async def handle_text_query(
     memory.add_user(text)
     message_id = str(uuid.uuid4())
 
-    full_response = await _stream_llm_with_tts(
-        ws, llm, memory, tts, tts_enabled, message_id, max_tokens=512
-    )
+    # ── Agent loop (multi-tool, max MAX_AGENT_ITERATIONS) ──────────────────
+    tts_queue: asyncio.Queue[str | None] = asyncio.Queue()
+    tts_task = None
+    if tts_enabled and tts.is_available:
+        tts_task = asyncio.create_task(_tts_sentence_worker(tts_queue, ws, tts))
 
-    # ── Tool call si détecté ────────────────────────────────────────────────
-    tool_call = parse_tool_call(full_response)
-    if tool_call:
-        tool_name, tool_args = tool_call
-        logger.info(f"Tool call: {tool_name}({tool_args})")
-        tool_result = tools.execute(tool_name, **tool_args)
-
-        tool_context = f"[Résultat de {tool_name}: {tool_result}]"
-        memory.add_assistant(tool_context)
-
-        second_id = str(uuid.uuid4())
-        second_response = await _stream_llm_with_tts(
-            ws, llm, memory, tts, tts_enabled, second_id, max_tokens=256
+    try:
+        final_text = await _agent_loop(
+            ws=ws,
+            llm=llm,
+            tts=tts,
+            tools=tools,
+            messages=memory.get_messages(),
+            tts_enabled=tts_enabled and tts.is_available,
+            message_id=message_id,
+            tts_queue=tts_queue,
         )
-        memory.add_assistant(second_response)
-        await manager.send(ws, "message_done", {"messageId": second_id})
-    else:
-        memory.add_assistant(full_response)
-        await manager.send(ws, "message_done", {"messageId": message_id})
+    finally:
+        if tts_task:
+            await tts_queue.put(None)
+            await tts_task
 
+    if final_text:
+        memory.add_assistant(final_text)
+
+    await manager.send(ws, "message_done", {"messageId": message_id})
     await manager.send(ws, "status", {"status": "idle"})
 
 
