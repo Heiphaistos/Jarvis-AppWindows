@@ -136,6 +136,7 @@ class LLMManager:
                 n_ctx=self._settings.n_ctx,
                 n_gpu_layers=self._settings.n_gpu_layers,
                 n_threads=self._settings.n_threads,
+                chat_format="mistral-instruct",
                 verbose=False,
             )
             logger.info(f"LLM chargé: {model_path.name}")

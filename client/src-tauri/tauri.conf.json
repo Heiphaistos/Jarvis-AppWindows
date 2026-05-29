@@ -21,11 +21,12 @@
         "resizable": true,
         "decorations": false,
         "transparent": true,
-        "center": true
+        "center": true,
+        "additionalBrowserArgs": "--allow-running-insecure-content --use-fake-ui-for-media-stream"
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' ws://127.0.0.1:8765; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; connect-src 'self' ws://127.0.0.1:8765; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:"
     }
   },
   "bundle": {
