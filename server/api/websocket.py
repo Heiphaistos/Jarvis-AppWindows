@@ -176,7 +176,10 @@ async def _tts_sentence_worker(
             except Exception as e:
                 logger.warning(f"TTS synthesis failed for sentence: {e}")
     finally:
-        await manager.send(ws, "tts_chunk", {"audio": "", "final": True, "index": index})
+        try:
+            await manager.send(ws, "tts_chunk", {"audio": "", "final": True, "index": index})
+        except Exception:
+            pass  # WebSocket déjà fermé — normal à la déconnexion
 
 
 async def _stream_llm_with_tts(

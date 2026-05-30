@@ -2,9 +2,10 @@ import { useRef, useCallback } from "react";
 import { useJarvisStore } from "../stores/jarvisStore";
 import type { ClientEvent } from "../types";
 
-// Laisse le navigateur choisir le sample rate natif (WebView2 = 48000 Hz en général)
-// Le serveur reçoit le vrai rate et resamplé à 16kHz côté Python
 const CHUNK_SIZE = 4096;
+// Détecte si les chunks audio sont silencieux (permission Windows manquante)
+let _silentChunkCount = 0;
+const SILENT_WARNING_THRESHOLD = 16; // ~2s de silence → avertissement
 
 export function useAudioCapture(send: (e: ClientEvent) => void) {
   const streamRef = useRef<MediaStream | null>(null);
@@ -13,30 +14,52 @@ export function useAudioCapture(send: (e: ClientEvent) => void) {
 
   const startCapture = useCallback(async () => {
     if (streamRef.current) return;
+    _silentChunkCount = 0;
     try {
       streamRef.current = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
       });
-      // Pas de sampleRate forcé — AudioContext utilise le rate natif du device
       const ctx = new AudioContext();
       contextRef.current = ctx;
-      const actualSampleRate = ctx.sampleRate; // 44100 ou 48000 selon WebView2
+      if (ctx.state === "suspended") await ctx.resume();
+      const actualSampleRate = ctx.sampleRate;
       const source = ctx.createMediaStreamSource(streamRef.current);
       const processor = ctx.createScriptProcessor(CHUNK_SIZE, 1, 1);
+
       processor.onaudioprocess = (e) => {
-        const data = Array.from(e.inputBuffer.getChannelData(0));
-        // Envoie le vrai sample rate pour que le serveur puisse resampler
+        const raw = e.inputBuffer.getChannelData(0);
+        // Détecter micro silencieux (Windows privacy bloqué)
+        let rms = 0;
+        for (let i = 0; i < raw.length; i++) rms += raw[i] * raw[i];
+        rms = Math.sqrt(rms / raw.length);
+        if (rms < 0.0001) {
+          _silentChunkCount++;
+          if (_silentChunkCount === SILENT_WARNING_THRESHOLD) {
+            useJarvisStore.getState().addMessage({
+              id: crypto.randomUUID(),
+              role: "system",
+              content: "⚠ Microphone silencieux — vérifie Windows : Paramètres → Confidentialité → Microphone → Autoriser les apps de bureau à accéder au microphone → ACTIVÉ",
+              timestamp: Date.now(),
+            });
+          }
+        } else {
+          _silentChunkCount = 0;
+        }
+        const data = Array.from(raw);
         send({ type: "audio_chunk", payload: { data, sampleRate: actualSampleRate } });
       };
+
       source.connect(processor);
       processor.connect(ctx.destination);
       processorRef.current = processor;
     } catch (err) {
-      console.error("Microphone access denied:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      useJarvisStore.getState().addMessage({
+        id: crypto.randomUUID(),
+        role: "system",
+        content: `⚠ Accès microphone refusé : ${msg}. Va dans Windows Paramètres → Confidentialité → Microphone.`,
+        timestamp: Date.now(),
+      });
       useJarvisStore.getState().setStatus("error");
       throw err;
     }

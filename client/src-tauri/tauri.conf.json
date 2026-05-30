@@ -22,7 +22,7 @@
         "decorations": false,
         "transparent": true,
         "center": true,
-        "additionalBrowserArgs": "--allow-running-insecure-content --use-fake-ui-for-media-stream"
+        "additionalBrowserArgs": "--allow-running-insecure-content"
       }
     ],
     "security": {
