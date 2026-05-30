@@ -9,12 +9,18 @@ if TYPE_CHECKING:
 
 logger = get_logger("stt")
 
-RMS_THRESHOLD = 0.005
-NO_SPEECH_THRESHOLD = 0.6
+# Seuil RMS relevé : le micro WASAPI capture à volume plus élevé qu'un stream WebView2
+RMS_THRESHOLD = 0.02
+# Seuil plus strict pour rejeter les segments sans parole
+NO_SPEECH_THRESHOLD = 0.75
+# Durée minimale de parole détectée (en secondes) pour déclencher la transcription
+MIN_SPEECH_DURATION_S = 0.3
+
 HALLUCINATION_PHRASES = {
     "amara.org", "sous-titres", "sous-titrage", "transcription",
     "merci d'avoir regardé", "à bientôt", "sous-titré par",
     "traduction", "traducteur", "www.", ".com", ".org",
+    "sous-titres réalisés", "patreon", "merci de votre attention",
 }
 
 
@@ -42,7 +48,9 @@ class STTManager:
 
     @staticmethod
     def _is_hallucination(text: str) -> bool:
-        t = text.lower()
+        t = text.lower().strip()
+        if len(t) < 3:
+            return True
         return any(phrase in t for phrase in HALLUCINATION_PHRASES)
 
     async def transcribe_chunks(
@@ -56,7 +64,7 @@ class STTManager:
                 [np.array(c, dtype=np.float32) for c in chunks]
             )
 
-            # Resampler à 16kHz si le navigateur a capturé à un autre rate
+            # Resampler à 16kHz si le sample rate natif est différent
             target_rate = 16000
             if sample_rate != target_rate:
                 from math import gcd
@@ -66,18 +74,32 @@ class STTManager:
                 logger.debug(f"Resampled {sample_rate}→{target_rate} Hz ({len(audio)} samples)")
 
             rms = float(np.sqrt(np.mean(audio ** 2)))
+            logger.debug(f"Audio RMS={rms:.4f} (seuil={RMS_THRESHOLD})")
             if rms < RMS_THRESHOLD:
                 logger.debug(f"Audio ignoré (silence) — RMS={rms:.4f}")
                 return ""
 
-            segments, _ = self._model.transcribe(  # type: ignore[union-attr]
+            # Normaliser l'amplitude — si micro Windows trop bas, Whisper hallucine
+            # Target RMS 0.1 (parole correcte), gain plafonné à +30 dB
+            target_rms = 0.1
+            gain = min(target_rms / rms, 31.6)  # max ~30 dB
+            audio = (audio * gain).clip(-1.0, 1.0)
+            logger.debug(f"Gain appliqué: x{gain:.2f} (RMS {rms:.4f}→{target_rms:.4f})")
+
+            segments, info = self._model.transcribe(  # type: ignore[union-attr]
                 audio,
                 language="fr",
-                beam_size=1,          # greedy decode — 5x faster, negligible quality loss
+                beam_size=5,
                 best_of=1,
                 vad_filter=True,
-                vad_parameters={"min_silence_duration_ms": 300},
+                vad_parameters={
+                    "min_silence_duration_ms": 500,
+                    "speech_pad_ms": 100,
+                    "min_speech_duration_ms": int(MIN_SPEECH_DURATION_S * 1000),
+                },
                 no_speech_threshold=NO_SPEECH_THRESHOLD,
+                condition_on_previous_text=False,  # évite les hallucinations chaînées
+                temperature=0.0,                   # décodage greedy pur — plus stable
             )
 
             result_parts: list[str] = []

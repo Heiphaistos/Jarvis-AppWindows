@@ -18,7 +18,7 @@ _rate_limiter = RateLimiter()
 
 logger = get_logger("websocket")
 
-CHUNK_THRESHOLD = 8
+CHUNK_THRESHOLD = 32  # ~2.7s d'audio à 48kHz avant transcription en streaming
 MAX_PAYLOAD_BYTES = 2 * 1024 * 1024   # 2 MB — audio chunk upper bound
 MAX_TEXT_CHARS = 2000
 ALLOWED_ORIGINS = {

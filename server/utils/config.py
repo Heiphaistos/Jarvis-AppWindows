@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     whisper_compute_type: str = _profile.whisper_compute
 
     piper_exe: Path = MODELS_DIR / "piper" / "piper.exe"
-    piper_voice: Path = MODELS_DIR / "piper" / "fr_FR-upmc-medium.onnx"
+    piper_voice: Path = MODELS_DIR / "piper" / "fr_FR-mls-medium.onnx"
 
     max_context_messages: int = 30
     hw_profile: str = _profile.name
