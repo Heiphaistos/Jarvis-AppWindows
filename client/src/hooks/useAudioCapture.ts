@@ -2,7 +2,8 @@ import { useRef, useCallback } from "react";
 import { useJarvisStore } from "../stores/jarvisStore";
 import type { ClientEvent } from "../types";
 
-const SAMPLE_RATE = 16000;
+// Laisse le navigateur choisir le sample rate natif (WebView2 = 48000 Hz en général)
+// Le serveur reçoit le vrai rate et resamplé à 16kHz côté Python
 const CHUNK_SIZE = 4096;
 
 export function useAudioCapture(send: (e: ClientEvent) => void) {
@@ -15,19 +16,21 @@ export function useAudioCapture(send: (e: ClientEvent) => void) {
     try {
       streamRef.current = await navigator.mediaDevices.getUserMedia({
         audio: {
-          sampleRate: SAMPLE_RATE,
           channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
         },
       });
-      const ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
+      // Pas de sampleRate forcé — AudioContext utilise le rate natif du device
+      const ctx = new AudioContext();
       contextRef.current = ctx;
+      const actualSampleRate = ctx.sampleRate; // 44100 ou 48000 selon WebView2
       const source = ctx.createMediaStreamSource(streamRef.current);
       const processor = ctx.createScriptProcessor(CHUNK_SIZE, 1, 1);
       processor.onaudioprocess = (e) => {
         const data = Array.from(e.inputBuffer.getChannelData(0));
-        send({ type: "audio_chunk", payload: { data, sampleRate: SAMPLE_RATE } });
+        // Envoie le vrai sample rate pour que le serveur puisse resampler
+        send({ type: "audio_chunk", payload: { data, sampleRate: actualSampleRate } });
       };
       source.connect(processor);
       processor.connect(ctx.destination);

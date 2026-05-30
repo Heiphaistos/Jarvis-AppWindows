@@ -129,6 +129,23 @@ def _build_system_prompt() -> str:
     return SYSTEM_PROMPT
 
 
+def _inject_system(system: str, messages: list[dict]) -> list[dict]:
+    """Injecte le system prompt dans le 1er message utilisateur.
+
+    mistral-instruct n'accepte que user/assistant — un rôle system est
+    silencieusement ignoré. Conformément au format officiel Mistral v0.3,
+    le system prompt est préfixé dans le premier tour utilisateur.
+    """
+    if not messages:
+        return [{"role": "user", "content": system + "\n\n[Commence ta réponse.]"}]
+    result = list(messages)
+    for i, m in enumerate(result):
+        if m["role"] == "user":
+            result[i] = {"role": "user", "content": f"{system}\n\n{m['content']}"}
+            break
+    return result
+
+
 class LLMManager:
     def __init__(self, settings: "Settings") -> None:
         self._settings = settings
@@ -175,7 +192,9 @@ class LLMManager:
             return
 
         system = _build_system_prompt()
-        full_messages = [{"role": "system", "content": system}] + messages
+        # mistral-instruct ne supporte que user/assistant — injecte le system
+        # dans le premier message utilisateur (format officiel Mistral v0.3)
+        full_messages = _inject_system(system, messages)
 
         def _generate() -> object:
             return self._llm.create_chat_completion(  # type: ignore[union-attr]
