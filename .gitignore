@@ -44,7 +44,11 @@ server/data/
 # PyInstaller
 server/dist/
 server/build/
-server/*.spec
+# server/*.spec — NE PAS ignorer, le .spec est versionnée
+.pyinstaller-build/
+
+# Ressources binaires compilées (trop lourdes pour git — distribuer via release)
+client/src-tauri/resources/
 
 # IDE
 .idea/

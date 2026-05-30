@@ -4,7 +4,20 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
 from utils.hardware import detect_profile as _detect_profile, HardwareProfile
 
-MODELS_DIR = Path(__file__).parents[1] / "models"
+import os as _os, sys as _sys
+
+def _resolve_models_dir() -> Path:
+    # 1. Variable d'environnement (injectée par JARVIS.exe au lancement)
+    env = _os.environ.get("JARVIS_MODELS_DIR")
+    if env:
+        return Path(env)
+    # 2. PyInstaller frozen — models/ à côté de l'exe
+    if getattr(_sys, "frozen", False):
+        return Path(_sys.executable).parent / "models"
+    # 3. Dev — server/../models
+    return Path(__file__).parents[1] / "models"
+
+MODELS_DIR = _resolve_models_dir()
 
 
 @lru_cache(maxsize=1)

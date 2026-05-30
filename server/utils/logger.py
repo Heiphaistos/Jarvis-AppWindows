@@ -3,7 +3,12 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
-LOGS_DIR = Path(__file__).parents[2] / ".logs"
+def _resolve_logs_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent / ".logs"
+    return Path(__file__).parents[2] / ".logs"
+
+LOGS_DIR = _resolve_logs_dir()
 LOGS_DIR.mkdir(exist_ok=True)
 
 

@@ -101,11 +101,19 @@ async def ws_endpoint(ws: WebSocket) -> None:
 
 if __name__ == "__main__":
     import uvicorn
+    # PyInstaller sans console → sys.stdout/stderr sont None, ce qui fait planter
+    # uvicorn.logging.DefaultFormatter via isatty(). On redirige vers devnull.
+    if getattr(sys, "frozen", False):
+        import io
+        if sys.stdout is None:
+            sys.stdout = io.StringIO()
+        if sys.stderr is None:
+            sys.stderr = io.StringIO()
     uvicorn.run(
-        "main:app",
+        app,
         host=settings.host,
         port=settings.port,
-        log_level="info",
+        log_config=None,  # évite la config logging d'uvicorn qui appelle isatty()
         ws_ping_interval=20,
         ws_ping_timeout=30,
     )

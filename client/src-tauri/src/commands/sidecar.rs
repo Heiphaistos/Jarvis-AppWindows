@@ -8,37 +8,36 @@ use std::os::windows::process::CommandExt;
 
 pub struct SidecarState(pub Mutex<Option<Child>>);
 
+/// Serveur Python compilé (PyInstaller) — embarqué dans le binaire à la compilation
+static SERVER_EXE: &[u8] = include_bytes!("../../resources/jarvis_server.exe");
+
 /// True if something is already listening on 127.0.0.1:8765
 fn is_server_running() -> bool {
     TcpStream::connect("127.0.0.1:8765").is_ok()
 }
 
-/// Walk up from the exe to find the project's `server/` directory.
-/// Works for both dev (target/debug) and release (target/release) builds.
-fn find_server_dir() -> Option<std::path::PathBuf> {
+/// Extrait jarvis_server.exe à côté de JARVIS.exe si absent ou différent.
+/// Retourne le chemin de l'exe extrait.
+fn extract_server_exe() -> Result<std::path::PathBuf, String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let dir = exe.parent().ok_or("Impossible de trouver le dossier de JARVIS.exe")?;
+    let server_path = dir.join("jarvis_server.exe");
+
+    if !server_path.exists() {
+        std::fs::write(&server_path, SERVER_EXE)
+            .map_err(|e| format!("Extraction jarvis_server.exe échouée: {e}"))?;
+    }
+    Ok(server_path)
+}
+
+/// Chemin du dossier models/ à côté de JARVIS.exe
+fn models_dir() -> Option<std::path::PathBuf> {
     let exe = std::env::current_exe().ok()?;
-    // target/(debug|release)/JARVIS.exe → up 4 levels → project root → server/
-    let from_exe = exe
-        .parent()? // target/debug or target/release
-        .parent()? // target
-        .parent()? // src-tauri
-        .parent()? // client
-        .parent()? // project root
-        .join("server");
-    if from_exe.join("main.py").exists() {
-        return Some(from_exe);
-    }
-    // Installed (NSIS currentUser): server/ next to exe
-    let next_to_exe = exe.parent()?.join("server");
-    if next_to_exe.join("main.py").exists() {
-        return Some(next_to_exe);
-    }
-    None
+    Some(exe.parent()?.join("models"))
 }
 
 /// Start the Python server silently. Idempotent: does nothing if already running.
 pub fn launch_server(state: &SidecarState) -> Result<(), String> {
-    // Don't spawn a second server if port is already open
     if is_server_running() {
         return Ok(());
     }
@@ -48,26 +47,28 @@ pub fn launch_server(state: &SidecarState) -> Result<(), String> {
         return Ok(());
     }
 
-    let dir = find_server_dir()
-        .ok_or_else(|| "Dossier server/ introuvable — lancez depuis le répertoire du projet".to_string())?;
+    let server_exe = extract_server_exe()?;
 
-    let python = dir.join(".venv").join("Scripts").join("python.exe");
-    if !python.exists() {
-        return Err(format!(
-            "Python venv introuvable: {} — exécutez: python -m venv server\\.venv",
-            python.display()
-        ));
+    let mut cmd = Command::new(&server_exe);
+
+    // Indique au serveur où trouver les modèles
+    if let Some(models) = models_dir() {
+        cmd.env("JARVIS_MODELS_DIR", models.to_string_lossy().as_ref());
     }
 
-    let mut cmd = Command::new(&python);
-    cmd.arg("main.py").current_dir(&dir);
+    // Répertoire de travail = dossier de JARVIS.exe
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            cmd.current_dir(dir);
+        }
+    }
 
     #[cfg(windows)]
-    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW — silencieux, pas de terminal
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
 
     let child = cmd
         .spawn()
-        .map_err(|e| format!("Impossible de démarrer le serveur Python: {e}"))?;
+        .map_err(|e| format!("Impossible de démarrer jarvis_server: {e}"))?;
 
     *guard = Some(child);
     Ok(())
