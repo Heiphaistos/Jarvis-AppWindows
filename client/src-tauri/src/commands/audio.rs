@@ -21,8 +21,9 @@ pub fn start_mic(app: AppHandle, state: State<'_, AudioStateInner>) -> Result<u3
         .map_err(|e| format!("Config audio : {e}"))?;
 
     let sample_rate = supported.sample_rate().0;
+    let channels = supported.channels(); // config native du device (souvent 2)
     let config = cpal::StreamConfig {
-        channels: 1,
+        channels,
         sample_rate: supported.sample_rate(),
         buffer_size: cpal::BufferSize::Default,
     };
@@ -35,7 +36,15 @@ pub fn start_mic(app: AppHandle, state: State<'_, AudioStateInner>) -> Result<u3
         .build_input_stream(
             &config,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                pending.extend_from_slice(data);
+                // Convertir multichannel → mono (moyenne des canaux)
+                let mono: Vec<f32> = if channels == 1 {
+                    data.to_vec()
+                } else {
+                    data.chunks(channels as usize)
+                        .map(|frame| frame.iter().sum::<f32>() / channels as f32)
+                        .collect()
+                };
+                pending.extend_from_slice(&mono);
                 while pending.len() >= CHUNK {
                     let chunk: Vec<f32> = pending.drain(..CHUNK).collect();
                     let _ = app2.emit(
