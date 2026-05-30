@@ -2,7 +2,6 @@ import { useRef, useCallback } from "react";
 import { useJarvisStore } from "../stores/jarvisStore";
 import type { ClientEvent } from "../types";
 
-const CHUNK_SIZE = 4096;
 // Détecte si les chunks audio sont silencieux (permission Windows manquante)
 let _silentChunkCount = 0;
 const SILENT_WARNING_THRESHOLD = 16; // ~2s de silence → avertissement
@@ -10,7 +9,7 @@ const SILENT_WARNING_THRESHOLD = 16; // ~2s de silence → avertissement
 export function useAudioCapture(send: (e: ClientEvent) => void) {
   const streamRef = useRef<MediaStream | null>(null);
   const contextRef = useRef<AudioContext | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const processorRef = useRef<AudioWorkletNode | null>(null);
 
   const startCapture = useCallback(async () => {
     if (streamRef.current) return;
@@ -24,10 +23,15 @@ export function useAudioCapture(send: (e: ClientEvent) => void) {
       if (ctx.state === "suspended") await ctx.resume();
       const actualSampleRate = ctx.sampleRate;
       const source = ctx.createMediaStreamSource(streamRef.current);
-      const processor = ctx.createScriptProcessor(CHUNK_SIZE, 1, 1);
 
-      processor.onaudioprocess = (e) => {
-        const raw = e.inputBuffer.getChannelData(0);
+      // AudioWorklet — remplacement moderne du ScriptProcessorNode déprécié
+      // Fonctionne correctement dans WebView2 contrairement à ScriptProcessorNode
+      await ctx.audioWorklet.addModule("/audio-processor.js");
+      const workletNode = new AudioWorkletNode(ctx, "audio-processor");
+      processorRef.current = workletNode;
+
+      workletNode.port.onmessage = (e: MessageEvent<number[]>) => {
+        const raw = e.data;
         // Détecter micro silencieux (Windows privacy bloqué)
         let rms = 0;
         for (let i = 0; i < raw.length; i++) rms += raw[i] * raw[i];
@@ -38,20 +42,19 @@ export function useAudioCapture(send: (e: ClientEvent) => void) {
             useJarvisStore.getState().addMessage({
               id: crypto.randomUUID(),
               role: "system",
-              content: "⚠ Microphone silencieux — vérifie Windows : Paramètres → Confidentialité → Microphone → Autoriser les apps de bureau à accéder au microphone → ACTIVÉ",
+              content:
+                "⚠ Microphone silencieux — vérifie Windows : Paramètres → Confidentialité → Microphone → Autoriser les apps de bureau à accéder au microphone → ACTIVÉ",
               timestamp: Date.now(),
             });
           }
         } else {
           _silentChunkCount = 0;
         }
-        const data = Array.from(raw);
-        send({ type: "audio_chunk", payload: { data, sampleRate: actualSampleRate } });
+        send({ type: "audio_chunk", payload: { data: raw, sampleRate: actualSampleRate } });
       };
 
-      source.connect(processor);
-      processor.connect(ctx.destination);
-      processorRef.current = processor;
+      source.connect(workletNode);
+      workletNode.connect(ctx.destination);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       useJarvisStore.getState().addMessage({
