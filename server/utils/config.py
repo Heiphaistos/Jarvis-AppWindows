@@ -38,8 +38,9 @@ class Settings(BaseSettings):
     n_threads: int = _profile.n_threads
 
     whisper_model: str = str(MODELS_DIR / f"faster-whisper-{_profile.whisper_model}")
-    whisper_device: str = _profile.device
-    whisper_compute_type: str = _profile.whisper_compute
+    # En mode PyInstaller, cublas64_12.dll n'est pas disponible — STT tourne sur CPU (int8)
+    whisper_device: str = "cpu" if getattr(_sys, "frozen", False) else _profile.device
+    whisper_compute_type: str = "int8" if getattr(_sys, "frozen", False) else _profile.whisper_compute
 
     piper_exe: Path = MODELS_DIR / "piper" / "piper.exe"
     piper_voice: Path = MODELS_DIR / "piper" / "fr_FR-mls-medium.onnx"
