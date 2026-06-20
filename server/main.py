@@ -81,7 +81,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("JARVIS arrêté.")
 
 
-app = FastAPI(title="JARVIS Core", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="JARVIS Core", version="3.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:1420", "http://127.0.0.1:1420", "tauri://localhost"],
