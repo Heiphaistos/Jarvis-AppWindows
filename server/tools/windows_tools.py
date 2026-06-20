@@ -66,12 +66,16 @@ def ping_host(host: str) -> str:
     """Ping un hôte et retourne la latence moyenne."""
     if not re.match(r'^[a-zA-Z0-9.\-_]+$', host) or len(host) > 253:
         return "Hôte invalide."
+    # L'hôte est passé via une variable PS affectée en premier (pas d'interpolation directe)
+    # même si la regex valide déjà le format — défense en profondeur.
+    safe_host = host.replace("'", "")  # double protection : supprime toute apostrophe résiduelle
     out = _run_ps(
-        f"$r = Test-Connection -ComputerName '{host}' -Count 3 -ErrorAction SilentlyContinue; "
+        f"$h = '{safe_host}'; "
+        f"$r = Test-Connection -ComputerName $h -Count 3 -ErrorAction SilentlyContinue; "
         f"if ($r) {{ "
         f"$avg = ($r | Measure-Object ResponseTime -Average).Average; "
-        f"\"Ping {host}: $([math]::Round($avg))ms (3 paquets)\" "
-        f"}} else {{ \"Hôte {host} inaccessible.\" }}"
+        f"\"Ping $h: $([math]::Round($avg))ms (3 paquets)\" "
+        f"}} else {{ \"Hôte $h inaccessible.\" }}"
     )
     return out or f"Ping {host}: pas de réponse."
 
