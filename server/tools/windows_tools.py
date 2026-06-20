@@ -122,17 +122,30 @@ def list_directory(path: str = "") -> str:
         return f"Permission refusée: {target}"
 
 
+def _validate_path(raw_path: str, allowed_roots: list[Path]) -> Path:
+    """Résout et valide un chemin contre une liste de racines autorisées."""
+    p = Path(raw_path).resolve()  # résout les symlinks et les chemin relatifs
+    for root in allowed_roots:
+        try:
+            p.relative_to(root.resolve())
+            return p
+        except ValueError:
+            continue
+    raise PermissionError(f"Accès refusé: {raw_path}")
+
+
 def read_file(path: str) -> str:
     """Lit le contenu d'un fichier texte (max 5000 caractères)."""
     MAX_CHARS = 5000
     base = Path.home()
     p = Path(path)
-    target = p.resolve() if p.is_absolute() else (base / path).resolve()
+    raw = str(p) if p.is_absolute() else str(base / path)
 
     allowed_roots = [base, Path("C:/Users"), Path("C:/tmp")]
-    is_safe = any(str(target).startswith(str(root)) for root in allowed_roots)
-    if not is_safe:
-        return f"Accès refusé: {path}"
+    try:
+        target = _validate_path(raw, allowed_roots)
+    except PermissionError as e:
+        return str(e)
 
     if not target.exists():
         return f"Fichier introuvable: {target}"

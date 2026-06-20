@@ -28,22 +28,34 @@ class _Counter:
 
 class RateLimiter:
     def __init__(self) -> None:
-        self._text: dict[int, _Counter] = defaultdict(_Counter)
-        self._audio: dict[int, _Counter] = defaultdict(_Counter)
+        self._text: dict[str, _Counter] = defaultdict(_Counter)
+        self._audio: dict[str, _Counter] = defaultdict(_Counter)
 
-    def allow_text(self, ws_id: int) -> bool:
-        allowed = self._text[ws_id].is_allowed(
+    @staticmethod
+    def _get_key(ws: object) -> str:
+        """Retourne l'adresse IP du client comme clé de rate-limit.
+
+        Utilise l'IP plutôt que id(ws) pour que plusieurs connexions
+        depuis la même IP partagent le même bucket.
+        """
+        return getattr(ws, "remote_address", ("unknown",))[0]
+
+    def allow_text(self, ws: object) -> bool:
+        key = self._get_key(ws)
+        allowed = self._text[key].is_allowed(
             time.monotonic(), _TEXT_QUERY_MAX, _TEXT_QUERY_WINDOW
         )
         if not allowed:
-            logger.warning(f"Rate limit text_query ws={ws_id}")
+            logger.warning(f"Rate limit text_query ip={key}")
         return allowed
 
-    def allow_audio(self, ws_id: int) -> bool:
-        return self._audio[ws_id].is_allowed(
+    def allow_audio(self, ws: object) -> bool:
+        key = self._get_key(ws)
+        return self._audio[key].is_allowed(
             time.monotonic(), _AUDIO_CHUNK_MAX, _AUDIO_CHUNK_WINDOW
         )
 
-    def cleanup(self, ws_id: int) -> None:
-        self._text.pop(ws_id, None)
-        self._audio.pop(ws_id, None)
+    def cleanup(self, ws: object) -> None:
+        key = self._get_key(ws)
+        self._text.pop(key, None)
+        self._audio.pop(key, None)

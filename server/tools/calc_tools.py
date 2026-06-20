@@ -1,5 +1,7 @@
 from __future__ import annotations
+import ast
 import math
+import operator
 import re
 import urllib.request
 import urllib.parse
@@ -8,30 +10,102 @@ from utils.logger import get_logger
 
 logger = get_logger("calc_tools")
 
-_SAFE_NAMES = {k: v for k, v in math.__dict__.items() if not k.startswith("_")}
-_SAFE_NAMES.update({"abs": abs, "round": round, "min": min, "max": max,
-                    "sum": sum, "pow": pow, "int": int, "float": float})
+# Fonctions mathématiques autorisées (liste blanche explicite)
+_SAFE_FUNCTIONS: dict[str, object] = {k: v for k, v in math.__dict__.items() if not k.startswith("_")}
+_SAFE_FUNCTIONS.update({
+    "abs": abs, "round": round, "min": min, "max": max,
+    "sum": sum, "pow": pow, "int": int, "float": float,
+})
+
+# Constantes autorisées (ast.Name nodes)
+_SAFE_CONSTANTS: dict[str, float] = {
+    "pi": math.pi,
+    "e": math.e,
+    "tau": math.tau,
+    "inf": math.inf,
+}
+
+# Opérateurs binaires et unaires autorisés
+_BIN_OPS: dict[type, object] = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+}
+_UNARY_OPS: dict[type, object] = {
+    ast.USub: operator.neg,
+    ast.UAdd: operator.pos,
+}
+
+
+def _safe_eval_node(node: ast.expr, depth: int = 0) -> float:
+    """Évalue récursivement un nœud AST de manière sécurisée."""
+    if depth > 50:
+        raise ValueError("Expression trop complexe (profondeur maximale atteinte).")
+
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, (int, float)):
+            return float(node.value)
+        raise ValueError(f"Type de constante non autorisé: {type(node.value).__name__}")
+
+    if isinstance(node, ast.Name):
+        if node.id in _SAFE_CONSTANTS:
+            return _SAFE_CONSTANTS[node.id]
+        raise ValueError(f"Identifiant non autorisé: '{node.id}'")
+
+    if isinstance(node, ast.BinOp):
+        op_fn = _BIN_OPS.get(type(node.op))
+        if op_fn is None:
+            raise ValueError(f"Opérateur binaire non autorisé: {type(node.op).__name__}")
+        left = _safe_eval_node(node.left, depth + 1)
+        right = _safe_eval_node(node.right, depth + 1)
+        return op_fn(left, right)  # type: ignore[operator]
+
+    if isinstance(node, ast.UnaryOp):
+        op_fn = _UNARY_OPS.get(type(node.op))
+        if op_fn is None:
+            raise ValueError(f"Opérateur unaire non autorisé: {type(node.op).__name__}")
+        return op_fn(_safe_eval_node(node.operand, depth + 1))  # type: ignore[operator]
+
+    if isinstance(node, ast.Call):
+        if not isinstance(node.func, ast.Name):
+            raise ValueError("Appels de méthode non autorisés (utilisez les fonctions directes).")
+        fn_name = node.func.id
+        fn = _SAFE_FUNCTIONS.get(fn_name)
+        if fn is None:
+            raise ValueError(
+                f"Fonction '{fn_name}' non autorisée. Utilisez: sqrt, sin, cos, log, exp, abs, round, etc."
+            )
+        args = [_safe_eval_node(arg, depth + 1) for arg in node.args]
+        if node.keywords:
+            raise ValueError("Arguments nommés non supportés dans les appels de fonction.")
+        return fn(*args)  # type: ignore[operator]
+
+    raise ValueError(f"Construction non autorisée: {type(node).__name__}")
 
 
 def calculate(expression: str) -> str:
     """
-    Évalue une expression mathématique sécurisée.
-    Supporte: + - * / ** % sqrt() sin() cos() log() pi e abs() round()
+    Évalue une expression mathématique sécurisée via AST (sans eval).
+    Supporte: + - * / ** % // sqrt() sin() cos() log() pi e abs() round()
     """
     expr = expression.strip()
     if len(expr) > 500:
         return "Expression trop longue."
-    if "__" in expr:
-        return "Expression invalide."
 
-    # Vérifier que les fonctions appelées sont dans la whitelist
-    for m in re.finditer(r'([a-zA-Z_]\w*)\s*\(', expr):
-        fn = m.group(1)
-        if fn not in _SAFE_NAMES:
-            return f"Fonction '{fn}' non autorisée. Utilisez: sqrt, sin, cos, log, exp, abs, round, etc."
+    # Remplacer ^ par ** pour compatibilité
+    expr = expr.replace("^", "**")
 
     try:
-        result = eval(expr, {"__builtins__": {}}, _SAFE_NAMES)
+        tree = ast.parse(expr, mode="eval")
+    except SyntaxError as e:
+        return f"Syntaxe invalide: {e}"
+
+    try:
+        result = _safe_eval_node(tree.body)
         if isinstance(result, float):
             if result == int(result) and abs(result) < 1e15:
                 return f"Résultat: {int(result)}"
@@ -39,7 +113,7 @@ def calculate(expression: str) -> str:
         return f"Résultat: {result}"
     except ZeroDivisionError:
         return "Erreur: division par zéro."
-    except Exception as e:
+    except (ValueError, TypeError) as e:
         return f"Erreur de calcul: {e}"
 
 

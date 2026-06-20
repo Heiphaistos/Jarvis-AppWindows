@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 import subprocess
 import urllib.parse
 import urllib.request
@@ -180,15 +181,26 @@ def list_processes(n: int = 10) -> str:
         return f"Erreur: {e}"
 
 
+def _validate_city(city: str) -> str:
+    """Valide et encode le nom de ville pour une utilisation dans une URL."""
+    if not re.match(r"^[a-zA-ZÀ-ÿ\s\-'\.]{1,100}$", city):
+        raise ValueError(f"Nom de ville invalide: {city!r}")
+    return urllib.parse.quote(city, safe='')
+
+
 def get_weather(city: str) -> str:
     """Get current weather via open-meteo.com (free, no API key)."""
     if not isinstance(city, str) or not city.strip():
         return "Erreur: indiquez une ville."
     try:
+        city_encoded = _validate_city(city.strip())
+    except ValueError as e:
+        return f"Erreur: {e}"
+    try:
         # Step 1: Geocode
         geo_url = (
             "https://nominatim.openstreetmap.org/search"
-            f"?q={urllib.parse.quote(city.strip())}&format=json&limit=1"
+            f"?q={city_encoded}&format=json&limit=1"
         )
         req = urllib.request.Request(geo_url, headers={"User-Agent": "JARVIS-Local/2.0 kratos442500@gmail.com"})
         with urllib.request.urlopen(req, timeout=8) as resp:
