@@ -23,5 +23,5 @@ numpy==2.4.6
 scipy==1.17.1
 
 # Utilities
-python-multipart==0.0.30
+python-multipart==0.0.31
 aiofiles==25.1.0
