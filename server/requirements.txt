@@ -15,7 +15,7 @@ pyautogui==0.9.54
 
 # Data validation
 pydantic==2.13.4
-pydantic-settings==2.14.1
+pydantic-settings==2.14.2
 
 # Audio
 sounddevice==0.5.5
@@ -23,5 +23,5 @@ numpy==2.4.6
 scipy==1.17.1
 
 # Utilities
-python-multipart==0.0.29
+python-multipart==0.0.30
 aiofiles==25.1.0
