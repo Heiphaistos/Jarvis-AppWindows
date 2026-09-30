@@ -41,6 +41,28 @@ _SENTENCE_BOUNDARY = re.compile(r'(?<=[.!?…»!?"])\s+|(?<=\.\.\.)\s+')
 
 MAX_AGENT_ITERATIONS = 5
 
+# Outils qui renvoient un dossier à synthétiser (et non un résultat court à
+# reformuler) : la réponse qui suit a besoin d'un vrai cerveau et de place.
+RICH_TOOLS = {"deep_research", "read_webpage"}
+_RICH_MAX_TOKENS = 1536
+
+
+def _tool_followup(name: str, args: dict | None, result: str) -> str:
+    header = f"[RÉSULTAT OUTIL {name}({args})]" if args is not None else f"[RÉSULTAT OUTIL {name}]"
+    if name in RICH_TOOLS:
+        return (
+            f"{header}\n{result}\n\n"
+            "Réponds maintenant à Monsieur en français à partir de ce contenu : réponse complète "
+            "et structurée (titres courts ou puces si utile), faits précis, sources citées [n] "
+            "quand elles sont numérotées, contradictions et incertitudes signalées. N'émets une "
+            "nouvelle balise JARVIS_TOOL que si une information indispensable manque vraiment."
+        )
+    return (
+        f"{header}\n{result}\n\n"
+        "Réponds directement à Monsieur en français, en une ou deux phrases, à partir de ce "
+        "résultat. N'émets PAS de balise JARVIS_TOOL — le résultat est déjà là."
+    )
+
 
 async def _agent_loop(
     ws: "WebSocket",
@@ -84,24 +106,16 @@ async def _agent_loop(
 
     # Fast-path : outil déjà exécuté par le routeur d'intention — le LLM ne
     # fait que formuler la réponse à partir du résultat.
+    rich = False  # un dossier (recherche, page web) attend une vraie synthèse
     if preexecuted is not None:
         name, args, result = preexecuted
         used_tools = True
+        rich = name in RICH_TOOLS
         await manager.send(ws, "agent_step", {
             "phase": "tool", "detail": name, "messageId": message_id,
         })
         await manager.send(ws, "tool_result", {"tool": name, "result": str(result)[:300]})
-        messages = messages + [
-            {
-                "role": "user",
-                "content": (
-                    f"[RÉSULTAT OUTIL {name}({args})]\n{result}\n\n"
-                    "Réponds directement à Monsieur en français, en une ou deux "
-                    "phrases, à partir de ce résultat. N'émets PAS de balise "
-                    "JARVIS_TOOL — le résultat est déjà là."
-                ),
-            },
-        ]
+        messages = messages + [{"role": "user", "content": _tool_followup(name, args, result)}]
 
     tag_open = "<JARVIS_TOOL>"
     tool_schemas = tools.schemas() if hasattr(tools, "schemas") else None
@@ -144,9 +158,13 @@ async def _agent_loop(
 
         in_tool_tag = False
         async for token in providers.stream(
-            system, messages, max_tokens=max_tokens, on_fallback=_notify_fallback,
+            system, messages,
+            max_tokens=max(max_tokens, _RICH_MAX_TOKENS) if rich else max_tokens,
+            on_fallback=_notify_fallback,
             # Après un outil, la reformulation est triviale : cerveau le plus rapide.
-            level="instant" if (preexecuted is not None or used_tools) and level != "deep" else level,
+            # Sauf pour un dossier à synthétiser : là il faut un vrai cerveau.
+            level=("deep" if level == "deep" else "standard") if rich
+            else "instant" if (preexecuted is not None or used_tools) and level != "deep" else level,
             on_route=_notify_route,
             # Appel de fonction natif pour les cerveaux cloud qui le gèrent.
             tools=tool_schemas,
@@ -205,6 +223,7 @@ async def _agent_loop(
             # Envoyer le résultat au client
             await manager.send(ws, "tool_result", {"tool": name, "result": str(result)[:300]})
             used_tools = True
+            rich = rich or name in RICH_TOOLS
 
             # Leçon apprise : un échec d'outil est mémorisé pour ne pas être répété
             if not lesson_recorded and str(result).lower().startswith("erreur"):
@@ -227,16 +246,7 @@ async def _agent_loop(
             # Réinjecter dans le contexte pour la prochaine itération LLM
             messages = messages + [
                 {"role": "assistant", "content": full_response},
-                {
-                    "role": "user",
-                    "content": (
-                        f"[RÉSULTAT OUTIL {name}]\n{result}\n\n"
-                        "Tu disposes maintenant du résultat ci-dessus. Réponds directement "
-                        "à Monsieur en français, en une ou deux phrases. N'émets PAS de "
-                        "nouvelle balise JARVIS_TOOL pour cette question — le résultat "
-                        "est déjà là."
-                    ),
-                },
+                {"role": "user", "content": _tool_followup(name, None, str(result))},
             ]
             continue  # Prochaine itération
 

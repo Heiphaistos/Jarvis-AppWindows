@@ -6,7 +6,7 @@ EXPECTED_TOOLS = {
     "delete_temp_files", "create_file", "move_file",
     "get_system_info", "diagnose_system", "list_processes", "get_datetime",
     "get_weather", "get_news",
-    "web_search",
+    "web_search", "deep_research",
     "list_emails", "send_email",
     "save_memory", "recall_memory", "list_memories", "forget_memory", "recall_conversations",
     "get_battery", "set_volume", "ping_host",
@@ -17,7 +17,7 @@ EXPECTED_TOOLS = {
 }
 
 
-def test_auto_discovery_41_outils():
+def test_auto_discovery_42_outils():
     registry = ToolRegistry()
     assert set(registry.list_tools()) == EXPECTED_TOOLS
 

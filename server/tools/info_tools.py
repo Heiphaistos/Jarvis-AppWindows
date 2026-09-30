@@ -263,24 +263,18 @@ def get_weather(city: str) -> str:
 
 @tool
 def get_news(topic: str = "", max_results: int = 5) -> str:
-    """Get latest news via DuckDuckGo."""
+    """Get the latest news headlines (Google News / Bing News), optionally on a topic."""
+    from core.web_search import news
+    topic = topic.strip() if isinstance(topic, str) else ""
     try:
-        from duckduckgo_search import DDGS  # type: ignore[import]
-        query = topic.strip() if isinstance(topic, str) and topic.strip() else "actualités France"
-        results = list(DDGS().news(query, max_results=min(int(max_results), 8)))
-        if not results:
-            return f"Aucune actualité trouvée pour: {topic}"
-        header = f"Actualités — «{topic}»:" if topic else "Actualités générales:"
-        lines = [header]
-        for i, r in enumerate(results, 1):
-            title = r.get("title", "Sans titre")
-            body = (r.get("body") or "")[:200]
-            source = r.get("source", "")
-            date = (r.get("date") or "")[:10]
-            lines.append(f"\n{i}. **{title}**\n   Source: {source} ({date})\n   {body}")
-        return "\n".join(lines)
-    except ImportError:
-        return "Module duckduckgo-search manquant — pip install duckduckgo-search"
+        results = news(topic, max(1, min(int(max_results), 8)))
     except Exception as e:
         logger.error(f"Erreur actualités: {e}")
         return f"Erreur actualités: {e}"
+    if not results:
+        return f"Aucune actualité trouvée pour: {topic}" if topic else "Aucune actualité disponible."
+    lines = [f"Actualités — «{topic}»:" if topic else "Actualités générales:"]
+    for i, r in enumerate(results, 1):
+        meta = " · ".join(x for x in (r.source, r.date) if x)
+        lines.append(f"\n{i}. **{r.title}**" + (f"\n   Source: {meta}" if meta else "") + (f"\n   {r.snippet[:200]}" if r.snippet else ""))
+    return "\n".join(lines)

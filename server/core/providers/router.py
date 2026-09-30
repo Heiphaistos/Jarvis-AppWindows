@@ -42,7 +42,11 @@ _INSTANT_RE = re.compile(
     r"ça va|comment vas-tu|qui es-tu|oui|non|stop|arrête|tais-toi|bonne nuit|à plus)\b",
     re.IGNORECASE,
 )
-_FORCE_DEEP = re.compile(r"^(réfléchis bien|mode (profond|expert)|analyse approfondie)", re.IGNORECASE)
+_FORCE_DEEP = re.compile(
+    r"^(réfléchis bien|mode (profond|expert)|analyse approfondie|recherche approfondie|"
+    r"fais(-moi)? une recherche approfondie)",
+    re.IGNORECASE,
+)
 _FORCE_FAST = re.compile(r"^(vite|rapidement|en bref|réponse courte)\b", re.IGNORECASE)
 
 
