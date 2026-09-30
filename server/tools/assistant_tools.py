@@ -268,3 +268,39 @@ def analyze_image(path: str, question: str = "") -> str:
         return "Image introuvable ou trop lourde (15 Mo max)."
     from core.vision import describe_image
     return describe_image(p.read_bytes(), mime, question)
+
+
+# ── Briefing ─────────────────────────────────────────────────────────────────
+
+def _home_city() -> str:
+    """Ville mémorisée (clé contenant « ville » ou « city »), sinon chaîne vide."""
+    try:
+        from core.persistent_memory import get_memory
+        found = get_memory().recall("ville")
+        m = re.search(r"ville[^:]*:\s*([A-Za-zÀ-ÿ' -]{2,40})", found, re.IGNORECASE)
+        return m.group(1).strip() if m else ""
+    except Exception:
+        return ""
+
+
+@tool
+def briefing(city: str = "") -> str:
+    """Point complet façon JARVIS : date, météo, rappels du jour, état de la machine et titres de l'actualité."""
+    from core.reminders import describe, get_reminders
+    from tools.info_tools import get_datetime, get_news, get_system_info, get_weather
+
+    parts = [get_datetime()]
+    town = city.strip() or _home_city()
+    if town:
+        parts.append(get_weather(town))
+    else:
+        parts.append("Météo : ville inconnue (dites « souviens-toi que j'habite à … »).")
+    try:
+        today_end = datetime.combine(datetime.now().date(), datetime.max.time()).timestamp()
+        todays = [describe(r) for r in get_reminders().pending() if r.due <= today_end]
+        parts.append("Rappels d'aujourd'hui :\n" + "\n".join(todays) if todays else "Aucun rappel aujourd'hui.")
+    except Exception:
+        pass
+    parts.append(get_system_info())
+    parts.append(get_news("", 3))
+    return "\n\n".join(parts)

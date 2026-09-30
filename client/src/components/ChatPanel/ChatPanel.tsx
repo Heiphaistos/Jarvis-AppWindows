@@ -5,8 +5,9 @@ import { Message } from "./Message";
 import { TypingIndicator } from "./TypingIndicator";
 
 const SUGGESTIONS = [
-  "Comment va mon système ?",
-  "Quelle est la météo à Paris ?",
+  "Fais-moi le point",
+  "Mets un minuteur de 10 minutes pour les pâtes",
+  "Regarde mon écran et dis-moi ce que tu vois",
   "Explique-moi le fonctionnement d'un réacteur à fusion",
   "Souviens-toi que je préfère les réponses courtes",
 ];

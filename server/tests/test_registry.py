@@ -13,11 +13,11 @@ EXPECTED_TOOLS = {
     "get_public_ip", "list_directory", "read_file",
     "calculate", "convert_units", "translate_text",
     "set_timer", "set_reminder", "list_reminders", "cancel_reminder",
-    "read_webpage", "wikipedia_summary", "media_control", "analyze_screen", "analyze_image",
+    "read_webpage", "wikipedia_summary", "media_control", "analyze_screen", "analyze_image", "briefing",
 }
 
 
-def test_auto_discovery_38_outils():
+def test_auto_discovery_39_outils():
     registry = ToolRegistry()
     assert set(registry.list_tools()) == EXPECTED_TOOLS
 

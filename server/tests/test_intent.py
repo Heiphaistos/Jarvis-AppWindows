@@ -42,3 +42,9 @@ def test_conversation_passe_au_llm():
     # Phrase longue avec contexte → jamais de fast-path
     assert fast_route("dans le rapport que je prépare, calcule 2+2 puis explique "
                       "la méthode utilisée et compare avec l'an dernier s'il te plaît") is None
+
+
+def test_briefing():
+    from core.intent import fast_route
+    assert fast_route("Jarvis, fais-moi le point") == ("briefing", {})
+    assert fast_route("quoi de neuf ce matin ?") == ("briefing", {})

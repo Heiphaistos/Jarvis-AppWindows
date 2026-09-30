@@ -37,6 +37,10 @@ _TIME_RE = re.compile(
     re.IGNORECASE,
 )
 _BATTERY_RE = re.compile(r"\bbatterie\b", re.IGNORECASE)
+_BRIEFING_RE = re.compile(
+    r"\b(briefing|fais[- ]moi (le|un) (point|topo|résumé)|quoi de neuf|récap(itulatif)? du jour|point du (jour|matin))\b",
+    re.IGNORECASE,
+)
 _IP_RE = re.compile(r"\bip\s+publique\b|\bmon\s+ip\b", re.IGNORECASE)
 
 
@@ -83,5 +87,8 @@ def fast_route(text: str) -> tuple[str, dict] | None:
 
     if _IP_RE.search(text):
         return "get_public_ip", {}
+
+    if _BRIEFING_RE.search(text):
+        return "briefing", {}
 
     return None
