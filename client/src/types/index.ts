@@ -87,6 +87,11 @@ export type ServerEvent =
   | { type: "tool_result"; payload: { tool: string; result: string } }
   | { type: "agent_step"; payload: { phase: AgentPhase; detail: string; messageId: string } }
   | { type: "brain"; payload: BrainRoute }
+  | { type: "live_state"; payload: { active: boolean; error?: string; model?: string; voice?: string } }
+  | { type: "live_audio"; payload: { audio: string; rate: number } }
+  | { type: "live_transcript"; payload: { role: "user" | "assistant"; text: string } }
+  | { type: "live_interrupted"; payload: Record<string, never> }
+  | { type: "live_turn_complete"; payload: Record<string, never> }
   | { type: "reminder"; payload: { id: number; kind: "timer" | "reminder"; message: string } }
   | { type: "wake"; payload: Record<string, never> }
   | { type: "wake_unavailable"; payload: Record<string, never> }
@@ -120,4 +125,6 @@ export type ClientEvent =
   | { type: "tts_done"; payload: Record<string, never> }
   | { type: "set_tts"; payload: { enabled: boolean } }
   | { type: "set_voice"; payload: { voice: string } }
-  | { type: "clear_history"; payload: Record<string, never> };
+  | { type: "clear_history"; payload: Record<string, never> }
+  | { type: "live_start"; payload: { voice: string } }
+  | { type: "live_stop"; payload: Record<string, never> };

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { Mic, MicOff, Send, Zap, CheckCircle, Network, Square, Activity, CloudSun, Clock, Newspaper, Eye } from "lucide-react";
+import { Mic, MicOff, Send, Zap, CheckCircle, Network, Square, Activity, CloudSun, Clock, Newspaper, Eye, AudioWaveform } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useJarvis } from "../../hooks/useJarvis";
 import { useJarvisStore } from "../../stores/jarvisStore";
@@ -8,7 +8,8 @@ export function CommandInput() {
   const [text, setText] = useState("");
   const [sent, setSent] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { sendText, toggleMic, isMicActive } = useJarvis();
+  const { sendText, toggleMic, toggleLive, isMicActive } = useJarvis();
+  const liveActive = useJarvisStore((s) => s.liveActive);
   const status = useJarvisStore((s) => s.status);
   const isConnected = useJarvisStore((s) => s.isConnected);
   const addMessage = useJarvisStore((s) => s.addMessage);
@@ -17,7 +18,8 @@ export function CommandInput() {
   const sendQuery = useJarvisStore((s) => s.sendQuery);
   const stopGeneration = useJarvisStore((s) => s.stopGeneration);
   const isBusy = status === "processing" || status === "speaking";
-  const isDisabled = !isConnected || isBusy;
+  // En LIVE, le texte tapé part aussi vers Gemini même pendant qu'il parle.
+  const isDisabled = !isConnected || (isBusy && !liveActive);
 
   const QUICK_ACTIONS = [
     { icon: Newspaper, label: "Briefing", query: "Fais-moi le point" },
@@ -179,6 +181,27 @@ export function CommandInput() {
           <Network size={16} />
         </motion.button>
 
+        {/* LIVE : conversation vocale temps réel (Gemini Live) */}
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => void toggleLive()}
+          disabled={!isConnected}
+          className="relative flex items-center gap-1 px-2 py-1.5 rounded text-[10px] tracking-widest font-bold transition-all disabled:opacity-30"
+          style={{
+            color: liveActive ? "#ff5577" : "#00d4ff88",
+            background: liveActive ? "#ff557718" : "transparent",
+            border: `1px solid ${liveActive ? "#ff557755" : "#00d4ff22"}`,
+          }}
+          title={liveActive ? "Terminer la conversation LIVE" : "Conversation vocale temps réel (Gemini Live, clé Gemini requise)"}
+        >
+          {liveActive && (
+            <motion.div className="absolute inset-0 rounded" style={{ boxShadow: "0 0 14px #ff557766" }}
+              animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.2, repeat: Infinity }} />
+          )}
+          <AudioWaveform size={14} /> LIVE
+        </motion.button>
+
         {/* Mic button */}
         <motion.button
           whileHover={{ scale: 1.1 }}
@@ -227,12 +250,12 @@ export function CommandInput() {
                 className="flex items-center gap-1.5"
               >
                 <CheckCircle size={13} />
-                ENVOYÉ
+                <span className="hidden 2xl:inline">ENVOYÉ</span>
               </motion.span>
             ) : (
               <motion.span key="send" className="flex items-center gap-1.5">
                 <Send size={13} />
-                ENVOYER
+                <span className="hidden 2xl:inline">ENVOYER</span>
               </motion.span>
             )}
           </AnimatePresence>
