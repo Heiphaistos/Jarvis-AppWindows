@@ -28,7 +28,7 @@ class FakeBrain(LLMProvider):
     def model(self):
         return f"{self.name}-model"
 
-    async def stream(self, system, messages, max_tokens=512):
+    async def stream(self, system, messages, max_tokens=512, tools=None):
         self.calls += 1
         try:
             await asyncio.sleep(self._delay)

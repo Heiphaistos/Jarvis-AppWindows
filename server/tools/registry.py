@@ -1,6 +1,8 @@
 from __future__ import annotations
 import importlib
+import inspect
 import pkgutil
+import typing
 
 import tools as _tools_pkg
 from utils.logger import get_logger
@@ -55,3 +57,48 @@ class ToolRegistry:
 
     def list_tools(self) -> list[str]:
         return list(self._tools)
+
+    def schemas(self) -> list[dict]:
+        """Schémas JSON des outils (appel de fonction natif des cerveaux cloud).
+
+        Déduits de la signature (types, valeurs par défaut) et de la docstring :
+        aucun schéma à maintenir à la main.
+        """
+        return [tool_schema(fn) for _, fn in sorted(self._tools.items())]
+
+
+_JSON_TYPES = {str: "string", int: "integer", float: "number", bool: "boolean", list: "array", dict: "object"}
+
+
+def tool_schema(fn) -> dict:
+    """{name, description, parameters} au format JSON Schema pour une fonction @tool."""
+    sig = inspect.signature(fn)
+    try:
+        hints = typing.get_type_hints(fn)
+    except Exception:
+        hints = {}
+    doc = inspect.getdoc(fn) or fn.__name__
+    description = doc.split("\n\n")[0].replace("\n", " ").strip()[:500]
+    props: dict[str, dict] = {}
+    required: list[str] = []
+    for name, param in sig.parameters.items():
+        if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD):
+            continue
+        hint = hints.get(name, str)
+        origin = typing.get_origin(hint)
+        if origin is typing.Union or str(origin) == "<class 'types.UnionType'>":
+            args = [a for a in typing.get_args(hint) if a is not type(None)]
+            hint = args[0] if args else str
+        prop: dict = {"type": _JSON_TYPES.get(typing.get_origin(hint) or hint, "string")}
+        if prop["type"] == "array":
+            prop["items"] = {"type": "string"}
+        if param.default is param.empty:
+            required.append(name)
+        elif param.default is not None:
+            prop["default"] = param.default
+        props[name] = prop
+    return {
+        "name": fn.__name__,
+        "description": description,
+        "parameters": {"type": "object", "properties": props, "required": required},
+    }

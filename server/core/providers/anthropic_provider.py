@@ -1,10 +1,10 @@
 from __future__ import annotations
 import json
-from typing import AsyncGenerator
+from typing import AsyncGenerator, AsyncIterator
 
 import httpx
 
-from core.providers.base import LLMProvider, ProviderError
+from core.providers.base import LLMProvider, ProviderError, parse_tool_args, tool_tag
 from utils.logger import get_logger
 
 logger = get_logger("provider.anthropic")
@@ -13,12 +13,46 @@ _TIMEOUT = httpx.Timeout(connect=10.0, read=120.0, write=30.0, pool=10.0)
 _API_VERSION = "2023-06-01"
 
 
+async def parse_anthropic_sse(lines: AsyncIterator[str], label: str = "Anthropic") -> AsyncGenerator[str, None]:
+    """Flux SSE Messages → texte ; un bloc tool_use devient une balise <JARVIS_TOOL>
+    (premier appel seulement, la boucle agent en traite un par itération)."""
+    tool: dict | None = None
+    emitted_tool = False
+    async for line in lines:
+        if not line.startswith("data:"):
+            continue
+        try:
+            event = json.loads(line[5:].strip())
+        except json.JSONDecodeError:
+            continue
+        etype = event.get("type")
+        if etype == "content_block_start":
+            block = event.get("content_block") or {}
+            if block.get("type") == "tool_use" and not emitted_tool:
+                tool = {"name": block.get("name", ""), "json": ""}
+        elif etype == "content_block_delta":
+            delta = event.get("delta") or {}
+            if delta.get("type") == "input_json_delta" and tool is not None:
+                tool["json"] += delta.get("partial_json", "")
+            else:
+                text = delta.get("text")
+                if text:
+                    yield text
+        elif etype == "content_block_stop" and tool is not None:
+            yield tool_tag(tool["name"], parse_tool_args(tool["json"]))
+            tool, emitted_tool = None, True
+        elif etype == "error":
+            detail = (event.get("error") or {}).get("message", "erreur inconnue")
+            raise ProviderError(f"{label}: {detail}")
+
+
 class AnthropicProvider(LLMProvider):
     """API Messages Anthropic native (SSE) — cerveau Claude."""
 
     name = "anthropic"
     label = "Anthropic (Claude)"
     tier = "cloud"
+    native_tools = True
 
     def __init__(self, api_key: str, model: str, base_url: str = "https://api.anthropic.com") -> None:
         self._api_key = api_key
@@ -38,14 +72,20 @@ class AnthropicProvider(LLMProvider):
         system: str,
         messages: list[dict[str, str]],
         max_tokens: int = 1024,
+        tools: list[dict] | None = None,
     ) -> AsyncGenerator[str, None]:
-        payload = {
+        payload: dict = {
             "model": self._model,
             "system": system,
             "messages": messages,
             "max_tokens": max_tokens,
             "stream": True,
         }
+        if tools:
+            payload["tools"] = [
+                {"name": t["name"], "description": t["description"], "input_schema": t["parameters"]}
+                for t in tools
+            ]
         headers = {
             "x-api-key": self._api_key,
             "anthropic-version": _API_VERSION,
@@ -61,19 +101,7 @@ class AnthropicProvider(LLMProvider):
                     if resp.status_code != 200:
                         body = (await resp.aread()).decode(errors="replace")[:300]
                         raise ProviderError(f"{self.label} HTTP {resp.status_code}: {body}")
-                    async for line in resp.aiter_lines():
-                        if not line.startswith("data:"):
-                            continue
-                        try:
-                            event = json.loads(line[5:].strip())
-                        except json.JSONDecodeError:
-                            continue
-                        if event.get("type") == "content_block_delta":
-                            text = (event.get("delta") or {}).get("text")
-                            if text:
-                                yield text
-                        elif event.get("type") == "error":
-                            detail = (event.get("error") or {}).get("message", "erreur inconnue")
-                            raise ProviderError(f"{self.label}: {detail}")
+                    async for piece in parse_anthropic_sse(resp.aiter_lines(), self.label):
+                        yield piece
         except httpx.HTTPError as e:
             raise ProviderError(f"{self.label} injoignable: {e}") from e
