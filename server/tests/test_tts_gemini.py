@@ -25,7 +25,7 @@ async def test_gemini_voice_wav(monkeypatch):
     pcm = b"\x10\x00" * 100
     seen = {}
 
-    async def fake_post(self, url, json=None, headers=None):
+    async def fake_post(self, url, json=None, headers=None, **kw):
         seen["url"], seen["body"], seen["key"] = url, json, headers["x-goog-api-key"]
         return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"inlineData": {
             "mimeType": "audio/L16;codec=pcm;rate=24000", "data": base64.b64encode(pcm).decode()}}]}}]})

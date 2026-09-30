@@ -64,6 +64,7 @@ async def _agent_loop(
         from core.providers.router import MAX_TOKENS
         max_tokens = MAX_TOKENS.get(level, 1024)
     used_tools = False
+    first_spoken = False  # 1re phrase déjà envoyée à la synthèse vocale
     lesson_recorded = False
     user_query = next(
         (m["content"][:200] for m in reversed(messages) if m["role"] == "user"), ""
@@ -117,7 +118,7 @@ async def _agent_loop(
         })
 
         async def _emit(text: str) -> None:
-            nonlocal accumulated, sentence_buf
+            nonlocal accumulated, sentence_buf, first_spoken
             if not text:
                 return
             await manager.send(ws, "token", {"token": text, "messageId": message_id})
@@ -129,6 +130,16 @@ async def _agent_loop(
                     phrase = sentence_buf[: m.start() + 1].strip()
                     sentence_buf = sentence_buf[m.end():]
                     if phrase:
+                        first_spoken = True
+                        await tts_queue.put(phrase)
+                elif not first_spoken and len(sentence_buf) > 70:
+                    # Première phrase longue : on la coupe à la virgule pour que
+                    # JARVIS commence à parler sans attendre le point.
+                    cut = max(sentence_buf.rfind(", "), sentence_buf.rfind("; "), sentence_buf.rfind(" : "))
+                    if cut > 25:
+                        phrase = sentence_buf[: cut + 1].strip()
+                        sentence_buf = sentence_buf[cut + 1:]
+                        first_spoken = True
                         await tts_queue.put(phrase)
 
         in_tool_tag = False
@@ -321,24 +332,48 @@ async def _tts_sentence_worker(
     ws: WebSocket,
     tts: TTSManager,
 ) -> None:
-    """Consomme les phrases de la queue, synthétise et envoie les chunks audio.
+    """Consomme les phrases, synthétise jusqu'à 2 phrases en parallèle et envoie
+    les chunks audio dans l'ordre : la phrase suivante est prête quand la
+    précédente finit d'être jouée.
 
     Garantit l'envoi du chunk final même si une synthèse échoue.
     """
     index = 0
+    ordered: asyncio.Queue[asyncio.Task | None] = asyncio.Queue()
+    slots = asyncio.Semaphore(2)  # Edge coupe les rafales : 2 synthèses simultanées au plus
+
+    async def _synth(sentence: str) -> str | None:
+        async with slots:
+            return await tts.synthesize(sentence)
+
+    async def _sender() -> None:
+        nonlocal index
+        while True:
+            task = await ordered.get()
+            if task is None:
+                return
+            try:
+                audio_b64 = await task
+            except Exception as e:
+                logger.warning(f"TTS synthesis failed for sentence: {e}")
+                continue
+            if audio_b64:
+                await manager.send(ws, "tts_chunk", {"audio": audio_b64, "final": False, "index": index})
+                index += 1
+
+    sender = asyncio.create_task(_sender())
     try:
         while True:
             sentence: str | None = await queue.get()
             if sentence is None:
                 break
-            try:
-                audio_b64 = await tts.synthesize(sentence)
-                if audio_b64:
-                    await manager.send(ws, "tts_chunk", {"audio": audio_b64, "final": False, "index": index})
-                    index += 1
-            except Exception as e:
-                logger.warning(f"TTS synthesis failed for sentence: {e}")
+            await ordered.put(asyncio.create_task(_synth(sentence)))
     finally:
+        await ordered.put(None)
+        try:
+            await sender
+        except Exception:
+            pass
         try:
             await manager.send(ws, "tts_chunk", {"audio": "", "final": True, "index": index})
         except Exception:

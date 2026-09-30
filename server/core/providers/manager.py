@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 import json
 from pathlib import Path
 from typing import AsyncGenerator, Awaitable, Callable, TYPE_CHECKING
@@ -7,6 +8,7 @@ from core.providers.base import LLMProvider, ProviderError
 from core.providers.local_llama import LocalLlamaProvider
 from core.providers.anthropic_provider import AnthropicProvider
 from core.providers.openai_compat import OpenAICompatProvider
+from core.providers.http import warm
 from core.providers.router import (
     HEDGE_DELAY_S, LEVELS, MAX_TOKENS, Telemetry, brain_key, hedged_stream, order_candidates,
 )
@@ -167,6 +169,35 @@ class ProviderManager:
 
     # ── API publique ────────────────────────────────────────────────────────
 
+    def warm_candidates(self) -> list[LLMProvider]:
+        """Cerveaux à garder « chauds » : têtes de chaîne en AUTO, sinon le provider actif."""
+        if self.is_auto:
+            picked: list[LLMProvider] = []
+            for level in LEVELS:
+                picked += order_candidates(level, self.candidates(level), self.telemetry)[:2]
+        else:
+            picked = [self.active]
+        seen: set[str] = set()
+        out = []
+        for p in picked:
+            target = p.warm_target()
+            if target and target[0] not in seen:
+                seen.add(target[0])
+                out.append(p)
+        return out
+
+    async def warmup(self) -> dict[str, float | None]:
+        """Ouvre les connexions TLS à l'avance : le 1er message ne paie pas la poignée de main."""
+        providers = self.warm_candidates()
+        results = await asyncio.gather(*(warm(*p.warm_target()) for p in providers))
+        return {brain_key(p): r for p, r in zip(providers, results)}
+
+    def schedule_warmup(self) -> None:
+        try:
+            asyncio.get_running_loop().create_task(self.warmup())
+        except RuntimeError:
+            pass  # hors boucle (tests, démarrage) : la tâche périodique s'en chargera
+
     def api_key(self, name: str) -> str:
         """Clé API d'un provider (usage serveur uniquement, jamais renvoyée au client)."""
         return str(self._configs.get(name, {}).get("api_key", ""))
@@ -255,6 +286,7 @@ class ProviderManager:
                 return "Mode AUTO : configurez au moins une clé API (Gemini, Groq, Anthropic…)."
             self._active_name = AUTO
             self._save_config()
+            self.schedule_warmup()
             logger.info("Cerveau actif : AUTO (routage multi-modèles)")
             return ""
         if name != "local" and name not in PRESETS:
@@ -264,6 +296,7 @@ class ProviderManager:
             return f"Provider '{name}' incomplet — clé API, modèle ou base_url manquant."
         self._active_name = name
         self._save_config()
+        self.schedule_warmup()
         logger.info(f"Provider actif: {name} ({provider.model})")
         return ""
 
