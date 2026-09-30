@@ -87,6 +87,7 @@ export type ServerEvent =
   | { type: "tool_result"; payload: { tool: string; result: string } }
   | { type: "agent_step"; payload: { phase: AgentPhase; detail: string; messageId: string } }
   | { type: "brain"; payload: BrainRoute }
+  | { type: "reminder"; payload: { id: number; kind: "timer" | "reminder"; message: string } }
   | { type: "wake"; payload: Record<string, never> }
   | { type: "wake_unavailable"; payload: Record<string, never> }
   | { type: "notice"; payload: { message: string } }
