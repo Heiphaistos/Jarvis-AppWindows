@@ -1,6 +1,6 @@
 <div align="center">
   <h1>J.A.R.V.I.S.</h1>
-  <p><strong>Assistant IA local style Iron Man — Cerveau multi-API (local ou cloud), wake word « Hey Jarvis », HUD holographique 3D, 28 outils.</strong></p>
+  <p><strong>Assistant IA local style Iron Man — Cerveau multi-API (local ou cloud), wake word « Hey Jarvis », HUD holographique 3D, 38 outils, vision.</strong></p>
 
   ![Version](https://img.shields.io/badge/version-4.7.0-blue)
   ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?logo=windows)
@@ -42,7 +42,7 @@ J.A.R.V.I.S. (*Just A Rather Very Intelligent System*) est un assistant IA local
 - **Timeline agent** — les étapes réflexion/outil/vérification s'affichent en direct
 - **STT temps réel** — Faster-Whisper (small), transcription instantanée du micro
 - **TTS naturel** — Piper TTS voix française (`fr_FR-upmc-medium`) avec compresseur et présence boost
-- **28 outils intégrés** — système, réseau, calcul, météo, email Gmail, gestion fichiers, mémoire persistante
+- **38 outils intégrés** — système, réseau, calcul, météo, email Gmail, gestion fichiers, mémoire persistante, minuteurs et rappels parlés, lecture de pages web, Wikipédia, contrôle multimédia, vision (écran et images)
 - **Agent loop multi-étapes** — enchaîne automatiquement jusqu'à 5 appels d'outils par message
 - **Mémoire persistante** — SQLite long-terme, rappelée à chaque session
 - **Moniteur système** — alertes temps réel CPU/RAM/disque via WebSocket
@@ -137,7 +137,7 @@ Le script `LANCER-JARVIS.bat` démarre automatiquement le serveur Python puis l'
 
 ---
 
-## Outils disponibles (28)
+## Outils disponibles (38)
 
 | Catégorie | Outils |
 |-----------|--------|
@@ -148,6 +148,9 @@ Le script `LANCER-JARVIS.bat` démarre automatiquement le serveur Python puis l'
 | **Calcul** | `calculate`, `convert_units`, `translate_text` |
 | **Mémoire** | `save_memory`, `recall_memory`, `list_memories` |
 | **Email** | `list_emails`, `send_email` |
+| **Assistant** | `set_timer`, `set_reminder`, `list_reminders`, `cancel_reminder`, `media_control` |
+| **Recherche** | `read_webpage`, `wikipedia_summary` |
+| **Vision** | `analyze_screen`, `analyze_image` (Gemini, Claude ou OpenAI selon les clés configurées) |
 
 ---
 

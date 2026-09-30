@@ -516,6 +516,12 @@ async def websocket_handler(
             try:
                 alert = await asyncio.wait_for(alert_queue.get(), timeout=1.0)
                 await manager.send(ws, alert["type"], alert["payload"])
+                if alert["type"] == "reminder" and tts_enabled and tts.is_available:
+                    # Rappel annoncé à voix haute, même sans question en cours.
+                    label = "Minuteur terminé" if alert["payload"].get("kind") == "timer" else "Rappel"
+                    audio = await tts.synthesize(f"{label}, Monsieur : {alert['payload'].get('message', '')}")
+                    if audio:
+                        await manager.send(ws, "tts_audio", {"audio": audio})
             except asyncio.TimeoutError:
                 continue
             except Exception:

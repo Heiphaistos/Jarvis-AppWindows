@@ -534,6 +534,16 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
         // Les tool_results sont gérés silencieusement (le LLM en parle dans sa réponse)
         break;
 
+      case "reminder": {
+        const { kind, message } = event.payload;
+        get().addMessage({
+          id: crypto.randomUUID(),
+          role: "system",
+          content: `${kind === "timer" ? "⏱ Minuteur terminé" : "⏰ Rappel"} — ${message}`,
+          timestamp: Date.now(),
+        });
+        break;
+      }
       case "brain": {
         set({ lastBrain: event.payload });
         break;

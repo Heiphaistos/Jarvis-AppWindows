@@ -68,6 +68,8 @@ _init_memory()
 # Provider manager — cerveau LLM interchangeable (local par défaut)
 from core.providers import init_provider_manager
 from core.persistent_memory import _DB_PATH as _MEM_DB_PATH
+from core.reminders import init_reminders
+reminders = init_reminders(_MEM_DB_PATH.parent / "reminders.json")
 providers = init_provider_manager(llm, _MEM_DB_PATH.parent)
 # La voix Gemini réutilise la clé du cerveau Gemini (onglet CERVEAU).
 tts.set_key_provider(lambda: providers.api_key("gemini"))
@@ -217,10 +219,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Lancer le chargement en background pour que le port s'ouvre immédiatement
     model_task = asyncio.create_task(_load_models_background())
     monitor_task = asyncio.create_task(_run_monitor())
+    # Minuteurs et rappels : annoncés à tous les clients connectés à l'échéance.
+    from core.monitor import broadcast_direct as _bd_rem
+
+    async def _reminder_due(r) -> None:
+        _bd_rem("reminder", {"id": r.id, "kind": r.kind, "message": r.message})
+
+    reminder_task = asyncio.create_task(reminders.run(_reminder_due))
     yield  # ← port 8765 ouvert ici, modèles chargent en arrière-plan
     model_task.cancel()
     monitor_task.cancel()
-    for task in (model_task, monitor_task):
+    reminder_task.cancel()
+    for task in (model_task, monitor_task, reminder_task):
         try:
             await task
         except asyncio.CancelledError:
