@@ -152,6 +152,7 @@ async def hedged_stream(
     hedge_delay: float,
     on_winner: WinnerCallback | None = None,
     max_parallel: int = 2,
+    tools: list[dict] | None = None,
 ) -> AsyncGenerator[str, None]:
     """Stream depuis le premier cerveau qui répond.
 
@@ -172,7 +173,7 @@ async def hedged_stream(
 
     async def _run(idx: int, provider: LLMProvider) -> None:
         try:
-            async for token in provider.stream(system, messages, max_tokens=max_tokens):
+            async for token in provider.stream(system, messages, max_tokens=max_tokens, tools=tools):
                 await events.put((idx, "tok", token))
             await events.put((idx, "end", None))
         except asyncio.CancelledError:

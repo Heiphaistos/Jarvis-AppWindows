@@ -29,6 +29,7 @@ class LocalLlamaProvider(LLMProvider):
         system: str,
         messages: list[dict[str, str]],
         max_tokens: int = 512,
+        tools: list[dict] | None = None,
     ) -> AsyncGenerator[str, None]:
         async for token in self._manager.stream(messages, max_tokens=max_tokens, system=system):
             yield token

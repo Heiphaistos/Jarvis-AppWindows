@@ -103,6 +103,7 @@ async def _agent_loop(
         ]
 
     tag_open = "<JARVIS_TOOL>"
+    tool_schemas = tools.schemas() if hasattr(tools, "schemas") else None
 
     for _iteration in range(MAX_AGENT_ITERATIONS):
         full_response = ""
@@ -136,6 +137,8 @@ async def _agent_loop(
             # Après un outil, la reformulation est triviale : cerveau le plus rapide.
             level="instant" if (preexecuted is not None or used_tools) and level != "deep" else level,
             on_route=_notify_route,
+            # Appel de fonction natif pour les cerveaux cloud qui le gèrent.
+            tools=tool_schemas,
         ):
             full_response += token
             if in_tool_tag:

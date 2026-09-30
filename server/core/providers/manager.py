@@ -59,6 +59,9 @@ _JUDGE_ORDER = [
 
 _CONFIG_FIELDS = {"api_key", "model", "base_url"}
 
+# APIs dont l'appel de fonction natif est fiable (les autres gardent les balises texte).
+_NATIVE_TOOLS = {"openai", "gemini", "groq", "cerebras", "deepseek", "xai", "mistral", "openrouter"}
+
 # Mode AUTO : pour chaque niveau de réflexion, les cerveaux essayés dans l'ordre
 # (« preset » ou « preset@modèle »). Seuls ceux dont la clé est configurée sont
 # utilisés ; le cerveau local sert toujours de dernier recours.
@@ -159,6 +162,7 @@ class ProviderManager:
             return AnthropicProvider(api_key=api_key, model=model, base_url=base_url)
         return OpenAICompatProvider(
             name=name, label=preset["label"], base_url=base_url, api_key=api_key, model=model,
+            native_tools=name in _NATIVE_TOOLS,
         )
 
     # ── API publique ────────────────────────────────────────────────────────
@@ -323,6 +327,7 @@ class ProviderManager:
         on_fallback: Callable[[str], Awaitable[None]] | None = None,
         level: str | None = None,
         on_route: Callable[[LLMProvider, float, str], Awaitable[None]] | None = None,
+        tools: list[dict] | None = None,
     ) -> AsyncGenerator[str, None]:
         """Stream depuis le cerveau actif.
 
@@ -354,6 +359,7 @@ class ProviderManager:
                     telemetry=self.telemetry,
                     hedge_delay=HEDGE_DELAY_S[lvl] if self._hedging else 3600.0,
                     on_winner=_winner,
+                    tools=tools,
                 ):
                     started = True
                     yield token
@@ -366,7 +372,7 @@ class ProviderManager:
         provider = self.active
         started = False
         try:
-            async for token in provider.stream(system, messages, max_tokens=max_tokens):
+            async for token in provider.stream(system, messages, max_tokens=max_tokens, tools=tools):
                 if not started and on_route is not None:
                     await on_route(provider, 0.0, level or "standard")
                 started = True
