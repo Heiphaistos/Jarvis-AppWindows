@@ -1,6 +1,6 @@
 <div align="center">
   <h1>J.A.R.V.I.S.</h1>
-  <p><strong>Assistant IA local style Iron Man — Cerveau multi-API (local ou cloud), wake word « Hey Jarvis », HUD holographique 3D, 42 outils, vision.</strong></p>
+  <p><strong>Assistant IA local style Iron Man — Cerveau multi-API (local ou cloud), wake word « Hey Jarvis », HUD holographique 3D, 45 outils, vision.</strong></p>
 
   ![Version](https://img.shields.io/badge/version-5.1.0-blue)
   ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?logo=windows)
@@ -17,6 +17,10 @@ J.A.R.V.I.S. (*Just A Rather Very Intelligent System*) est un assistant IA local
 
 ---
 
+## Nouveautés 5.2 — diagnostic NiTriTe, contrôle du PC, voix fiable
+
+- **Diagnostic avancé avec NiTriTe Agent** : JARVIS se connecte à [NiTriTe Agent](https://github.com/Heiphaistos/Nitrite-We-Panel-) (il lit son port et son jeton dans `%LOCALAPPDATA%\NiTriTe-WebPanel\session.json`, même sécurité que le navigateur). « Fais-moi un rapport de santé de mon PC », « ma batterie va bien ? », « état de mes disques », « mon PC chauffe », « j'ai eu des écrans bleus » → santé et cycles de la batterie, SMART des disques, températures CPU/GPU, écrans bleus et journal Système, programmes au démarrage, santé de Windows, performances, matériel. Les **alertes** (batterie sous 80 %, disque en « Warning », secteurs réalloués, 80/90 °C, redémarrage en attente…) sont calculées localement ; le rapport complet est enregistré dans `Documents\JARVIS\Rapports`. Le briefing signale aussi les alertes. **Lecture seule** : aucune commande qui efface, désinstalle ou modifie le système n'est accessible à JARVIS. « Lance NiTriTe » démarre l'agent sans navigateur (`JARVIS_NITRITE_AGENT` pour indiquer le chemin de l'exe) ; sans lui, un diagnostic de base (psutil) reste disponible.
+
 ## Nouveautés 5.1 — mémoire, recherche, actions en chaîne
 
 - **Mémoire automatique** : après chaque échange (clavier, voix ou LIVE), JARVIS retient de lui-même ce que vous dites de vous — prénom, ville, goûts, projets, proches, habitudes — sans qu'il faille dire « retiens ». Un fait qui change est mis à jour (même clé), « oublie… » l'efface. Quand vous le corrigez, il en tire une **leçon** réinjectée dans ses consignes. Les faits sans ambiguïté (prénom, ville, âge, métier) sont extraits localement ; le reste par le cerveau le plus rapide, en arrière-plan, sans ralentir la réponse. Jamais de mot de passe, code ni numéro de carte. Onglet **MÉMOIRE** : tout voir, supprimer un souvenir ou une leçon, couper la fonction (ou `JARVIS_AUTO_MEMORY=0`). Seuls les souvenirs pertinents pour la demande sont injectés dans le prompt (identité et préférences toujours).
@@ -29,7 +33,7 @@ J.A.R.V.I.S. (*Just A Rather Very Intelligent System*) est un assistant IA local
 ## Nouveautés 5.0 — cerveau AUTO, HUD v5, outils natifs, vision
 
 - **HUD v5** : hologramme au centre avec anneaux HUD animés, rail de télémétrie (jauges circulaires, cerveau utilisé, latence), conversation dans un panneau en verre ; chaque réponse affiche le modèle qui l'a produite et sa latence.
-- **Appel d'outils natif** pour les cerveaux cloud (schémas générés depuis les signatures des 42 outils).
+- **Appel d'outils natif** pour les cerveaux cloud (schémas générés depuis les signatures des 45 outils).
 - **Nouveaux outils** : minuteurs et rappels annoncés à voix haute, lecture de pages web, Wikipédia, touches multimédia, vision de l'écran et des images.
 - **Mode LIVE (Gemini Live)** : bouton LIVE → conversation vocale temps réel avec Gemini. Le micro part directement vers Gemini, la voix revient en flux continu sans attendre la fin de la phrase, les outils de JARVIS restent disponibles pendant la conversation, et le texte tapé au clavier reçoit aussi une réponse parlée. La voix Gemini choisie (Charon, Orus, Iapetus) est réutilisée. Requiert la clé Gemini de l'onglet CERVEAU ; modèle réglable avec `JARVIS_LIVE_MODEL` (défaut `gemini-2.5-flash-native-audio-preview-09-2025`). Pour éviter l'écho, le micro est coupé pendant que JARVIS parle.
 - **Rapidité** : connexions persistantes et préchauffées vers les cerveaux, synthèse vocale en parallèle, première phrase prononcée dès la première virgule.
@@ -56,7 +60,7 @@ J.A.R.V.I.S. (*Just A Rather Very Intelligent System*) est un assistant IA local
 - **Timeline agent** — les étapes réflexion/outil/vérification s'affichent en direct
 - **STT temps réel** — Faster-Whisper (small), transcription instantanée du micro
 - **TTS naturel** — Piper TTS voix française (`fr_FR-upmc-medium`) avec compresseur et présence boost
-- **42 outils intégrés** — système, réseau, calcul, météo, email Gmail, gestion fichiers, mémoire persistante, minuteurs et rappels parlés, lecture de pages web, Wikipédia, contrôle multimédia, vision (écran et images)
+- **45 outils intégrés** — système, réseau, calcul, météo, email Gmail, gestion fichiers, mémoire persistante, minuteurs et rappels parlés, lecture de pages web, Wikipédia, contrôle multimédia, vision (écran et images)
 - **Agent loop multi-étapes** — enchaîne automatiquement jusqu'à 5 appels d'outils par message
 - **Mémoire persistante** — SQLite long-terme, rappelée à chaque session
 - **Moniteur système** — alertes temps réel CPU/RAM/disque via WebSocket
@@ -151,13 +155,14 @@ Le script `LANCER-JARVIS.bat` démarre automatiquement le serveur Python puis l'
 
 ---
 
-## Outils disponibles (42)
+## Outils disponibles (45)
 
 | Catégorie | Outils |
 |-----------|--------|
 | **Système** | `open_application`, `kill_application`, `take_screenshot`, `read_clipboard`, `write_clipboard`, `delete_temp_files`, `create_file`, `move_file` |
 | **Windows** | `get_battery`, `set_volume`, `ping_host`, `get_public_ip`, `list_directory`, `read_file` |
 | **Monitoring** | `get_system_info`, `diagnose_system`, `list_processes` |
+| **Diagnostic NiTriTe** | `pc_diagnostic`, `pc_health_report`, `nitrite_start` |
 | **Web & Info** | `web_search`, `deep_research`, `get_weather`, `get_news` |
 | **Calcul** | `calculate`, `convert_units`, `translate_text` |
 | **Mémoire** | `save_memory`, `recall_memory`, `list_memories`, `forget_memory`, `recall_conversations` (+ mémoire automatique) |

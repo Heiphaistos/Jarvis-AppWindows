@@ -110,6 +110,11 @@ MÉMOIRE:
   forget_memory(key) — oublie un souvenir
   recall_conversations(query, limit) — retrouve les conversations passées
 
+DIAGNOSTIC PC (via NiTriTe Agent, lecture seule) :
+  pc_diagnostic(topic) — batterie, disques, temperatures, plantages, demarrage, sante, performances, materiel ou all
+  pc_health_report() — rapport complet enregistré dans Documents/JARVIS/Rapports
+  nitrite_start() — lance NiTriTe Agent si un diagnostic avancé est demandé et qu'il ne tourne pas
+
 EMAIL:
   list_emails(count=5) — emails non lus Gmail
   send_email(to, subject, body) — envoie un email

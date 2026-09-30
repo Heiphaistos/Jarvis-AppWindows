@@ -43,7 +43,7 @@ MAX_AGENT_ITERATIONS = 5
 
 # Outils qui renvoient un dossier à synthétiser (et non un résultat court à
 # reformuler) : la réponse qui suit a besoin d'un vrai cerveau et de place.
-RICH_TOOLS = {"deep_research", "read_webpage"}
+RICH_TOOLS = {"deep_research", "read_webpage", "pc_diagnostic", "pc_health_report"}
 _RICH_MAX_TOKENS = 1536
 
 

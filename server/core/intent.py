@@ -53,6 +53,18 @@ _RESEARCH_RE = re.compile(
     r"\s+(?:sur|à\s+propos\s+d[e']|au\s+sujet\s+d[e']|concernant)?\s*(.{3,})$",
     re.IGNORECASE,
 )
+_PC_REPORT_RE = re.compile(
+    r"\b(rapport|bilan|check-?up|diagnostic)\s+(?:complet\s+)?(?:de\s+(?:santé|sante)\s+)?(?:de|du|sur)\s+(?:mon|ma|le|l')?\s*(?:pc|ordi(?:nateur)?|machine)\b"
+    r"|\bdiagnostique\s+(?:mon|le)\s+(?:pc|ordi(?:nateur)?)\b",
+    re.IGNORECASE,
+)
+_PC_TOPIC_RE = [
+    (re.compile(r"\b(santé|sante|usure)\s+de\s+(?:ma|la)\s+batterie\b|\bbatterie\s+(?:est\s+)?(?:usée|fatiguée|en\s+bon\s+état|va\s+bien)", re.IGNORECASE), "batterie"),
+    (re.compile(r"\b(santé|sante|état|etat)\s+de\s+(?:mes|mon|mon|les|le)\s+(?:disques?|ssd)\b|\bsmart\b", re.IGNORECASE), "disques"),
+    (re.compile(r"\b(température|temperature)s?\s+(?:de\s+)?(?:mon|du|de\s+mon)?\s*(?:pc|cpu|processeur|gpu|carte\s+graphique)\b|\bmon\s+pc\s+chauffe\b", re.IGNORECASE), "temperatures"),
+    (re.compile(r"\b(écrans?\s+bleus?|ecrans?\s+bleus?|bsod|plantages?)\b", re.IGNORECASE), "plantages"),
+]
+_NITRITE_START_RE = re.compile(r"^(?:lance|démarre|demarre|ouvre|active)\s+(?:l'agent\s+)?nitrite(?:\s+agent)?\b", re.IGNORECASE)
 _IP_RE = re.compile(r"\bip\s+publique\b|\bmon\s+ip\b", re.IGNORECASE)
 
 
@@ -96,6 +108,17 @@ def fast_route(text: str) -> tuple[str, dict] | None:
 
     if _TIME_RE.search(text):
         return "get_datetime", {}
+
+    # Diagnostic (santé, usure) avant le simple niveau de charge.
+    if _NITRITE_START_RE.search(text):
+        return "nitrite_start", {}
+
+    if _PC_REPORT_RE.search(text):
+        return "pc_health_report", {}
+
+    for pattern, topic in _PC_TOPIC_RE:
+        if pattern.search(text):
+            return "pc_diagnostic", {"topic": topic}
 
     if _BATTERY_RE.search(text) and re.search(
         r"niveau|combien|reste|état|charge|\?", text, re.IGNORECASE
