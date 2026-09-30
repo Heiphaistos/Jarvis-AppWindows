@@ -92,7 +92,7 @@ export type ServerEvent =
   | { type: "live_transcript"; payload: { role: "user" | "assistant"; text: string } }
   | { type: "live_interrupted"; payload: Record<string, never> }
   | { type: "live_turn_complete"; payload: Record<string, never> }
-  | { type: "reminder"; payload: { id: number; kind: "timer" | "reminder"; message: string } }
+  | { type: "reminder"; payload: { id: number; kind: "timer" | "reminder" | "routine"; message: string } }
   | { type: "wake"; payload: Record<string, never> }
   | { type: "wake_unavailable"; payload: Record<string, never> }
   | { type: "notice"; payload: { message: string } }

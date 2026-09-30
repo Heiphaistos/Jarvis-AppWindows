@@ -1,8 +1,8 @@
 <div align="center">
   <h1>J.A.R.V.I.S.</h1>
-  <p><strong>Assistant IA local style Iron Man — Cerveau multi-API (local ou cloud), wake word « Hey Jarvis », HUD holographique 3D, 50 outils, vision.</strong></p>
+  <p><strong>Assistant IA local style Iron Man — Cerveau multi-API (local ou cloud), wake word « Hey Jarvis », HUD holographique 3D, 51 outils, vision.</strong></p>
 
-  ![Version](https://img.shields.io/badge/version-5.1.0-blue)
+  ![Version](https://img.shields.io/badge/version-5.2.0-blue)
   ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?logo=windows)
   ![Stack](https://img.shields.io/badge/stack-Tauri%20v2%20%2B%20Python%20FastAPI-purple)
   ![CUDA](https://img.shields.io/badge/CUDA-12.1%2B-76B900?logo=nvidia)
@@ -23,6 +23,7 @@ J.A.R.V.I.S. (*Just A Rather Very Intelligent System*) est un assistant IA local
 - **Outils en parallèle** : plusieurs informations indépendantes sont récupérées d'un coup — « la météo à Paris, Lyon et Nice » lance les trois requêtes en même temps (4 max), au lieu de l'une après l'autre. Claude, OpenAI, Gemini et les API compatibles transmettent maintenant tous leurs appels d'outils, plus seulement le premier.
 - **Contrôle du PC, au clavier comme à la voix** : lister les fenêtres, en mettre une au premier plan, la réduire, l'agrandir ou la fermer (fermeture normale : l'application peut proposer d'enregistrer) ; taper du texte (accents et emoji compris, via l'API Unicode de Windows, sans toucher au presse-papiers) ; envoyer des raccourcis (« ctrl+s », « alt+tab », « win+d ») ; remplir un formulaire champ par champ avec Tab entre chaque, et le valider. Sans fenêtre précisée, la cible est celle qui était au premier plan avant JARVIS — jamais JARVIS lui-même. Aucune dépendance ajoutée (API Win32 via ctypes).
 - **Mode vocal fiable** : si une clé **Groq** (gratuite) ou OpenAI est configurée dans l'onglet CERVEAU, la voix est transcrite par Whisper large-v3 (Groq, ~0,3 s) ou gpt-4o-mini-transcribe — bien plus juste en français que le Whisper « small » local, qui reste le secours hors ligne (`JARVIS_CLOUD_STT=0` pour ne rien envoyer). Le filtre anti-hallucinations compare maintenant la phrase entière : « ouvre google.com », « traduction de… » ou « merci » ne sont plus jetés à tort, tandis que les génériques inventés par Whisper (« Sous-titrage ST' 501 », « merci d'avoir regardé »), les boucles et l'écho de la consigne sont écartés ; les segments peu fiables (logprob, taux de compression) aussi. « Jervis », « Jar vice »… redeviennent « Jarvis ». En mode vocal, JARVIS répond en une à trois phrases parlées, fait répéter une phrase incohérente plutôt que d'inventer, et demande confirmation avant d'agir quand la transcription est incertaine (marquée « (?) » à l'écran).
+- **Routines** : « tous les matins en semaine à 7h30, fais-moi le briefing » → JARVIS annonce à voix haute un briefing condensé en quelques phrases (date, météo, rappels, alertes PC, actualité) ; « chaque lundi à 9h, contrôle la santé du PC » → contrôle via NiTriTe, **muet si tout va bien** ; ou un rappel récurrent (« tous les soirs à 21h, pense à tes médicaments »). Jours : tous les jours, en semaine, week-end, liste ou plage (« lundi-vendredi »). Une routine manquée de plus d'une heure (PC éteint) est reportée au lendemain au lieu de se déclencher à l'allumage. Liste et annulation avec `list_reminders` / `cancel_reminder`.
 
 ## Nouveautés 5.1 — mémoire, recherche, actions en chaîne
 
@@ -36,7 +37,7 @@ J.A.R.V.I.S. (*Just A Rather Very Intelligent System*) est un assistant IA local
 ## Nouveautés 5.0 — cerveau AUTO, HUD v5, outils natifs, vision
 
 - **HUD v5** : hologramme au centre avec anneaux HUD animés, rail de télémétrie (jauges circulaires, cerveau utilisé, latence), conversation dans un panneau en verre ; chaque réponse affiche le modèle qui l'a produite et sa latence.
-- **Appel d'outils natif** pour les cerveaux cloud (schémas générés depuis les signatures des 50 outils).
+- **Appel d'outils natif** pour les cerveaux cloud (schémas générés depuis les signatures des 51 outils).
 - **Nouveaux outils** : minuteurs et rappels annoncés à voix haute, lecture de pages web, Wikipédia, touches multimédia, vision de l'écran et des images.
 - **Mode LIVE (Gemini Live)** : bouton LIVE → conversation vocale temps réel avec Gemini. Le micro part directement vers Gemini, la voix revient en flux continu sans attendre la fin de la phrase, les outils de JARVIS restent disponibles pendant la conversation, et le texte tapé au clavier reçoit aussi une réponse parlée. La voix Gemini choisie (Charon, Orus, Iapetus) est réutilisée. Requiert la clé Gemini de l'onglet CERVEAU ; modèle réglable avec `JARVIS_LIVE_MODEL` (défaut `gemini-2.5-flash-native-audio-preview-09-2025`). Pour éviter l'écho, le micro est coupé pendant que JARVIS parle.
 - **Rapidité** : connexions persistantes et préchauffées vers les cerveaux, synthèse vocale en parallèle, première phrase prononcée dès la première virgule.
@@ -63,7 +64,7 @@ J.A.R.V.I.S. (*Just A Rather Very Intelligent System*) est un assistant IA local
 - **Timeline agent** — les étapes réflexion/outil/vérification s'affichent en direct
 - **STT temps réel** — Faster-Whisper (small), transcription instantanée du micro
 - **TTS naturel** — Piper TTS voix française (`fr_FR-upmc-medium`) avec compresseur et présence boost
-- **50 outils intégrés** — système, réseau, calcul, météo, email Gmail, gestion fichiers, mémoire persistante, minuteurs et rappels parlés, lecture de pages web, Wikipédia, contrôle multimédia, vision (écran et images)
+- **51 outils intégrés** — système, réseau, calcul, météo, email Gmail, gestion fichiers, mémoire persistante, minuteurs et rappels parlés, lecture de pages web, Wikipédia, contrôle multimédia, vision (écran et images)
 - **Agent loop multi-étapes** — enchaîne automatiquement jusqu'à 5 appels d'outils par message
 - **Mémoire persistante** — SQLite long-terme, rappelée à chaque session
 - **Moniteur système** — alertes temps réel CPU/RAM/disque via WebSocket
@@ -158,7 +159,7 @@ Le script `LANCER-JARVIS.bat` démarre automatiquement le serveur Python puis l'
 
 ---
 
-## Outils disponibles (50)
+## Outils disponibles (51)
 
 | Catégorie | Outils |
 |-----------|--------|
@@ -171,7 +172,7 @@ Le script `LANCER-JARVIS.bat` démarre automatiquement le serveur Python puis l'
 | **Calcul** | `calculate`, `convert_units`, `translate_text` |
 | **Mémoire** | `save_memory`, `recall_memory`, `list_memories`, `forget_memory`, `recall_conversations` (+ mémoire automatique) |
 | **Email** | `list_emails`, `send_email` |
-| **Assistant** | `briefing`, `set_timer`, `set_reminder`, `list_reminders`, `cancel_reminder`, `media_control` |
+| **Assistant** | `briefing`, `set_routine`, `set_timer`, `set_reminder`, `list_reminders`, `cancel_reminder`, `media_control` |
 | **Recherche** | `read_webpage`, `wikipedia_summary` |
 | **Vision** | `analyze_screen`, `analyze_image` (Gemini, Claude ou OpenAI selon les clés configurées) |
 

@@ -68,6 +68,54 @@ def set_reminder(when: str, message: str) -> str:
     return f"Rappel #{r.id} programmé le {target:%d/%m à %H:%M} : {message}"
 
 
+_DAY_WORDS = {
+    "lundi": 0, "mardi": 1, "mercredi": 2, "jeudi": 3, "vendredi": 4, "samedi": 5, "dimanche": 6,
+    "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6,
+}
+
+
+def parse_days(text: str) -> list[int]:
+    """« tous les jours », « en semaine », « week-end », « lundi, mercredi », « lundi-vendredi »."""
+    t = (text or "").strip().lower()
+    if not t or re.search(r"tous les jours|chaque jour|quotidien|daily|tlj", t):
+        return list(range(7))
+    if re.search(r"semaine|ouvr[ée]s?|ouvrables?|weekdays?", t) and "week-end" not in t:
+        return list(range(5))
+    if re.search(r"week-?end", t):
+        return [5, 6]
+    m = re.search(r"(\w+)\s*(?:-|à|au|a)\s*(\w+)", t)
+    if m and m.group(1) in _DAY_WORDS and m.group(2) in _DAY_WORDS:
+        a, b = _DAY_WORDS[m.group(1)], _DAY_WORDS[m.group(2)]
+        return list(range(a, b + 1)) if a <= b else list(range(a, 7)) + list(range(0, b + 1))
+    return sorted({d for word, d in _DAY_WORDS.items() if re.search(rf"\b{word}s?\b", t)})
+
+
+@tool
+def set_routine(time: str, action: str = "briefing", days: str = "tous les jours", message: str = "") -> str:
+    """Programme une routine récurrente à heure fixe (« 08:00 »). action : briefing (point du jour parlé), pc_check (contrôle santé du PC via NiTriTe, ne parle qu'en cas de problème) ou message (rappel récurrent, avec message). days : « tous les jours », « en semaine », « week-end », « lundi, jeudi »…"""
+    from core.reminders import ROUTINE_ACTIONS, describe, get_reminders
+    m = _TIME_RE.match((time or "").strip().lower())
+    if not m or m.group(1):
+        return "Heure non reconnue : donnez une heure fixe, par exemple « 08:00 » ou « 7h30 »."
+    hour, minute = int(m.group(2)), int(m.group(3) or 0)
+    if hour > 23 or minute > 59:
+        return "Heure invalide."
+    act = {"brief": "briefing", "point": "briefing", "pc": "pc_check", "sante": "pc_check",
+           "santé": "pc_check", "diagnostic": "pc_check", "rappel": "message"}.get(action.strip().lower(), action.strip().lower())
+    if act not in ROUTINE_ACTIONS:
+        return "Action inconnue : briefing, pc_check ou message."
+    if act == "message" and not message.strip():
+        return "Précisez le message du rappel récurrent."
+    day_list = parse_days(days)
+    if not day_list:
+        return "Jours non reconnus : « tous les jours », « en semaine », « week-end » ou des noms de jours."
+    try:
+        r = get_reminders().add_routine(f"{hour:02d}:{minute:02d}", day_list, act, message)
+    except ValueError as e:
+        return f"Erreur: {e}"
+    return f"Routine programmée : {describe(r)}. Annulable avec cancel_reminder({r.id})."
+
+
 @tool
 def list_reminders() -> str:
     """Liste les minuteurs et rappels en attente."""

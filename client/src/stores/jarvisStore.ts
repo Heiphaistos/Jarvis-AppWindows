@@ -590,7 +590,9 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
         get().addMessage({
           id: crypto.randomUUID(),
           role: "system",
-          content: `${kind === "timer" ? "⏱ Minuteur terminé" : "⏰ Rappel"} — ${message}`,
+          content: kind === "routine"
+            ? `🔁 ${message}`
+            : `${kind === "timer" ? "⏱ Minuteur terminé" : "⏰ Rappel"} — ${message}`,
           timestamp: Date.now(),
         });
         break;
