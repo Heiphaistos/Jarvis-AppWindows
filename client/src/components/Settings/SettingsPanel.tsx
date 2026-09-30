@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Settings, X, Volume2, VolumeX, Mic, Globe, Mail, CheckCircle, AlertCircle, Upload, Cpu, Ear, Gauge, Palette, Shield } from "lucide-react";
+import { Settings, X, Volume2, VolumeX, Mic, Globe, Mail, CheckCircle, AlertCircle, Upload, Cpu, Ear, Gauge, Palette, Shield, Brain } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useJarvisStore } from "../../stores/jarvisStore";
 import { ProvidersTab } from "./ProvidersTab";
 import { PerfTab } from "./PerfTab";
 import { ThemeTab } from "./ThemeTab";
+import { MemoryTab } from "./MemoryTab";
 
 interface VoiceOption {
   id: string;
@@ -28,7 +29,7 @@ type GmailStatus = "loading" | "non_configured" | "not_authenticated" | "connect
 
 export function SettingsPanel() {
   const [open, setOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"voice" | "brain" | "perf" | "theme" | "services">("voice");
+  const [activeTab, setActiveTab] = useState<"voice" | "brain" | "memory" | "perf" | "theme" | "services">("voice");
 
   const ttsEnabled = useJarvisStore((s) => s.ttsEnabled);
   const selectedVoice = useJarvisStore((s) => s.selectedVoice);
@@ -117,6 +118,7 @@ export function SettingsPanel() {
   const tabs = [
     { id: "voice" as const, label: "VOIX", icon: <Volume2 size={11} /> },
     { id: "brain" as const, label: "CERVEAU", icon: <Cpu size={11} /> },
+    { id: "memory" as const, label: "MÉMOIRE", icon: <Brain size={11} /> },
     { id: "perf" as const, label: "PERF", icon: <Gauge size={11} /> },
     { id: "theme" as const, label: "THÈME", icon: <Palette size={11} /> },
     { id: "services" as const, label: "SERVICES", icon: <Globe size={11} /> },
@@ -348,6 +350,9 @@ export function SettingsPanel() {
 
                   {/* ── BRAIN TAB ── */}
                   {activeTab === "brain" && <ProvidersTab />}
+
+                  {/* ── MEMORY TAB ── */}
+                  {activeTab === "memory" && <MemoryTab />}
 
                   {/* ── PERF TAB ── */}
                   {activeTab === "perf" && <PerfTab />}

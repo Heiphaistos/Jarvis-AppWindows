@@ -33,6 +33,7 @@ export function TelemetryRail() {
   const providerLabel = useJarvisStore((s) => s.providerLabel);
   const providerModel = useJarvisStore((s) => s.providerModel);
   const lastBrain = useJarvisStore((s) => s.lastBrain);
+  const memoryVersion = useJarvisStore((s) => s.memoryVersion);
 
   const [memCount, setMemCount] = useState<number | null>(null);
   const [gpuName, setGpuName] = useState("");
@@ -40,6 +41,9 @@ export function TelemetryRail() {
     if (!isConnected) return;
     fetch("http://127.0.0.1:8765/api/memories/count").then((r) => r.json())
       .then((d: { count: number }) => setMemCount(d.count)).catch(() => {});
+  }, [isConnected, memoryVersion]);
+  useEffect(() => {
+    if (!isConnected) return;
     fetch("http://127.0.0.1:8765/api/system_info").then((r) => r.json())
       .then((d: { info: string }) => setGpuName(d.info.match(/GPU: ([^|]+)/)?.[1].trim() ?? "")).catch(() => {});
   }, [isConnected]);

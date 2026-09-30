@@ -96,6 +96,15 @@ export type ServerEvent =
   | { type: "wake"; payload: Record<string, never> }
   | { type: "wake_unavailable"; payload: Record<string, never> }
   | { type: "notice"; payload: { message: string } }
+  | {
+      type: "memory_update";
+      payload: {
+        saved: { key: string; value: string; category: string }[];
+        forgotten: string[];
+        lesson: string;
+        summary: string;
+      };
+    }
   | { type: "error"; payload: { message: string } }
   | {
       type: "server_status";

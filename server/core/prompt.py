@@ -35,7 +35,7 @@ def build_system_prompt(tier: str, user_text: str, stable: bool = False) -> str:
     try:
         from core.persistent_memory import get_memory
         memory = get_memory()
-        ctx = memory.get_context_summary()
+        ctx = memory.get_context_summary("" if stable else user_text)
         if ctx:
             parts.append(ctx)
         lessons = memory.get_lessons_summary()

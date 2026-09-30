@@ -30,3 +30,18 @@ def list_memories(category: str = "") -> str:
     """List all stored memories, optionally filtered by category."""
     from core.persistent_memory import get_memory
     return get_memory().list_all(category.strip() if isinstance(category, str) else "")
+
+
+@tool
+def forget_memory(key: str) -> str:
+    """Forget a stored fact about the user (exact key, as shown by list_memories)."""
+    if not isinstance(key, str) or not key.strip():
+        return "Erreur: clé invalide."
+    from core.persistent_memory import get_memory
+    memory = get_memory()
+    if memory.forget(key.strip()):
+        return f"✓ Oublié : {key.strip()}"
+    from core.auto_memory import normalize_key
+    if memory.forget(normalize_key(key)):
+        return f"✓ Oublié : {normalize_key(key)}"
+    return f"Aucun souvenir avec la clé « {key.strip()} ». Utilise list_memories pour voir les clés."

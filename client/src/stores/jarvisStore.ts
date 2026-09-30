@@ -309,6 +309,8 @@ interface JarvisState {
   setCouncilEnabled: (v: boolean) => void;
   metrics: { cpu: number; ram: number; gpu: number | null; vram: number | null };
   perfActive: string;
+  /** Incrémenté quand la mémoire automatique apprend quelque chose (rafraîchit l'UI). */
+  memoryVersion: number;
   sendQuery: (text: string) => void;
   stopGeneration: () => void;
   armorFx: boolean;
@@ -378,6 +380,7 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
   },
   metrics: { cpu: 0, ram: 0, gpu: null, vram: null },
   perfActive: "",
+  memoryVersion: 0,
   armorFx: localStorage.getItem("jarvis_armor_fx") !== "0",
   setArmorFx: (armorFx) => {
     localStorage.setItem("jarvis_armor_fx", armorFx ? "1" : "0");
@@ -671,6 +674,16 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
           id: crypto.randomUUID(),
           role: "system",
           content: "⚠ Wake word indisponible — openwakeword non installé côté serveur.",
+          timestamp: Date.now(),
+        });
+        break;
+
+      case "memory_update":
+        set((s) => ({ memoryVersion: s.memoryVersion + 1 }));
+        addMessage({
+          id: crypto.randomUUID(),
+          role: "system",
+          content: `🧠 Retenu — ${event.payload.summary}`,
           timestamp: Date.now(),
         });
         break;
