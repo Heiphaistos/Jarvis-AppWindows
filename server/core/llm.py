@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = get_logger("llm")
 
 SYSTEM_PROMPT = """\
-Tu es J.A.R.V.I.S. v4.0 — l'assistant IA personnel de Monsieur. Tu réponds toujours en français.
+Tu es J.A.R.V.I.S. v5 — l'assistant IA personnel de Monsieur. Tu réponds toujours en français.
 
 ## RÈGLES PRIORITAIRES
 

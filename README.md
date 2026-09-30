@@ -2,7 +2,7 @@
   <h1>J.A.R.V.I.S.</h1>
   <p><strong>Assistant IA local style Iron Man — Cerveau multi-API (local ou cloud), wake word « Hey Jarvis », HUD holographique 3D, 38 outils, vision.</strong></p>
 
-  ![Version](https://img.shields.io/badge/version-4.7.0-blue)
+  ![Version](https://img.shields.io/badge/version-5.0.0-blue)
   ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?logo=windows)
   ![Stack](https://img.shields.io/badge/stack-Tauri%20v2%20%2B%20Python%20FastAPI-purple)
   ![CUDA](https://img.shields.io/badge/CUDA-12.1%2B-76B900?logo=nvidia)
@@ -17,8 +17,12 @@ J.A.R.V.I.S. (*Just A Rather Very Intelligent System*) est un assistant IA local
 
 ---
 
-## Nouveautés 4.7 — cerveau AUTO et voix Gemini
+## Nouveautés 5.0 — cerveau AUTO, HUD v5, outils natifs, vision
 
+- **HUD v5** : hologramme au centre avec anneaux HUD animés, rail de télémétrie (jauges circulaires, cerveau utilisé, latence), conversation dans un panneau en verre ; chaque réponse affiche le modèle qui l'a produite et sa latence.
+- **Appel d'outils natif** pour les cerveaux cloud (schémas générés depuis les signatures des 38 outils).
+- **Nouveaux outils** : minuteurs et rappels annoncés à voix haute, lecture de pages web, Wikipédia, touches multimédia, vision de l'écran et des images.
+- **Rapidité** : connexions persistantes et préchauffées vers les cerveaux, synthèse vocale en parallèle, première phrase prononcée dès la première virgule.
 - **Routage multi-modèles (mode AUTO)** : chaque demande est classée en *instantané* (salutations, ordres, reformulation d'un résultat d'outil), *standard* ou *profond* (analyse, code, rédaction). Chaque niveau a sa chaîne de cerveaux, par défaut :
   - instantané : Cerebras → Groq → Gemini 2.5 Flash-Lite → Claude Haiku 4.5 → …
   - standard : Gemini 2.5 Flash → Claude Sonnet 5.5 → OpenAI → Groq → …

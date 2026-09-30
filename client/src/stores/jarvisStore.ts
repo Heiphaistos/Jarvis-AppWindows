@@ -255,6 +255,8 @@ interface JarvisState {
   providerModel: string;
   /** Dernier cerveau utilisé (mode AUTO) : niveau, modèle, latence du 1er mot. */
   lastBrain: BrainRoute | null;
+  /** Cerveau qui a ouvert chaque réponse (id du message → routage). */
+  messageBrains: Record<string, BrainRoute>;
   agentSteps: AgentStep[];
   bootDone: boolean;
   wakeWordEnabled: boolean;
@@ -311,6 +313,7 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
   providerLabel: "Local (Mistral GGUF)",
   providerModel: "",
   lastBrain: null,
+  messageBrains: {},
   agentSteps: [],
   bootDone: false,
   wakeWordEnabled: localStorage.getItem("jarvis_wake_word") === "1",
@@ -545,7 +548,14 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
         break;
       }
       case "brain": {
-        set({ lastBrain: event.payload });
+        const route = event.payload;
+        set((s) => ({
+          lastBrain: route,
+          // On garde le premier cerveau d'une réponse (les suivants reformulent un outil).
+          messageBrains: s.messageBrains[route.messageId]
+            ? s.messageBrains
+            : { ...s.messageBrains, [route.messageId]: route },
+        }));
         break;
       }
       case "agent_step": {

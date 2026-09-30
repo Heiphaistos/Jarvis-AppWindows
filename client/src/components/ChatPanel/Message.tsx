@@ -1,3 +1,4 @@
+import { useJarvisStore } from "../../stores/jarvisStore";
 import React from "react";
 import { motion } from "framer-motion";
 import type { Message as MsgType } from "../../types";
@@ -330,6 +331,7 @@ function MarkdownContent({ content }: { content: string }) {
 }
 
 export function Message({ message }: Props) {
+  const brain = useJarvisStore((s) => s.messageBrains[message.id]);
   const isUser = message.role === "user";
   const isSystem = message.role === "system";
   const [copied, setCopied] = React.useState(false);
@@ -381,6 +383,11 @@ export function Message({ message }: Props) {
         {/* Label */}
         <div className="text-[9px] tracking-widest mb-1 px-1" style={{ color: isUser ? "#00d4ffaa" : "#00ff88aa" }}>
           {isUser ? "VOUS" : "J.A.R.V.I.S."}
+          {!isUser && brain && (
+            <span className="ml-2 font-mono tracking-normal text-blue-200/40" title={`${brain.label} · niveau ${brain.level}`}>
+              {brain.model} · {brain.ttftMs} ms
+            </span>
+          )}
         </div>
 
         {/* Bubble */}

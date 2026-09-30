@@ -68,7 +68,7 @@ export function ChatPanel() {
       </AnimatePresence>
 
       {messages.length > 0 && (
-        <div className="flex justify-end px-3 pt-1">
+        <div className="flex justify-end px-3 pt-1 pb-3">
           <button
             onClick={exportConversation}
             title="Exporter la conversation en Markdown"
