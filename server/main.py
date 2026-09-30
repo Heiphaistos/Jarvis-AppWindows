@@ -224,6 +224,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from core.monitor import broadcast_direct as _bd_rem
 
     async def _reminder_due(r) -> None:
+        if r.kind == "routine":
+            # Routine : briefing condensé, contrôle PC (muet si tout va bien), message.
+            from core.routines import run as _run_routine
+            message = await _run_routine(r, providers)
+            if message:
+                _bd_rem("reminder", {"id": r.id, "kind": "routine", "message": message})
+            return
         _bd_rem("reminder", {"id": r.id, "kind": r.kind, "message": r.message})
 
     reminder_task = asyncio.create_task(reminders.run(_reminder_due))
@@ -253,7 +260,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("JARVIS arrêté.")
 
 
-app = FastAPI(title="JARVIS Core", version="5.1.0", lifespan=lifespan)
+app = FastAPI(title="JARVIS Core", version="5.2.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:1420", "http://127.0.0.1:1420", "tauri://localhost"],

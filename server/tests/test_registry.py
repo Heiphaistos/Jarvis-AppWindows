@@ -12,12 +12,12 @@ EXPECTED_TOOLS = {
     "get_battery", "set_volume", "ping_host",
     "get_public_ip", "list_directory", "read_file",
     "calculate", "convert_units", "translate_text",
-    "set_timer", "set_reminder", "list_reminders", "cancel_reminder",
+    "set_timer", "set_routine", "set_reminder", "list_reminders", "cancel_reminder",
     "read_webpage", "wikipedia_summary", "media_control", "analyze_screen", "analyze_image", "briefing", "pc_diagnostic", "pc_health_report", "nitrite_start", "list_windows", "window_action", "type_text", "press_keys", "fill_form",
 }
 
 
-def test_auto_discovery_50_outils():
+def test_auto_discovery_51_outils():
     registry = ToolRegistry()
     assert set(registry.list_tools()) == EXPECTED_TOOLS
 

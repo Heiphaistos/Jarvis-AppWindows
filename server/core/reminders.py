@@ -5,7 +5,7 @@ import json
 import threading
 import time
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from utils.logger import get_logger
@@ -20,8 +20,30 @@ class Reminder:
     id: int
     due: float        # timestamp epoch (s)
     message: str
-    kind: str         # "timer" | "reminder"
+    kind: str         # "timer" | "reminder" | "routine"
     created: float
+    # Routines (récurrentes) : heure « HH:MM », jours 0=lundi … 6=dimanche, action.
+    at: str = ""
+    days: list[int] | None = None
+    action: str = "message"   # "message" | "briefing" | "pc_check"
+
+
+ROUTINE_ACTIONS = ("message", "briefing", "pc_check")
+# PC éteint à l'heure prévue : une routine en retard de plus d'une heure est
+# reportée à la prochaine occurrence au lieu de se déclencher à l'allumage.
+ROUTINE_GRACE_S = 3600
+DAY_NAMES = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+
+
+def next_occurrence(at: str, days: list[int], after: datetime) -> datetime:
+    """Prochaine date strictement après `after` à l'heure `at` un des jours `days`."""
+    hour, minute = (int(x) for x in at.split(":"))
+    for offset in range(8):
+        day = after.date() + timedelta(days=offset)
+        candidate = datetime.combine(day, datetime.min.time()).replace(hour=hour, minute=minute)
+        if candidate > after and candidate.weekday() in days:
+            return candidate
+    raise ValueError("aucun jour valide")
 
 
 class ReminderStore:
@@ -77,6 +99,24 @@ class ReminderStore:
         self._poke()
         return r
 
+    def add_routine(self, at: str, days: list[int], action: str, message: str = "") -> Reminder:
+        if action not in ROUTINE_ACTIONS:
+            raise ValueError(f"action inconnue : {action}")
+        days = sorted({int(d) for d in days if 0 <= int(d) <= 6})
+        if not days:
+            raise ValueError("aucun jour")
+        due = next_occurrence(at, days, datetime.now()).timestamp()
+        with self._lock:
+            if len(self._items) >= MAX_REMINDERS:
+                raise ValueError(f"{MAX_REMINDERS} rappels maximum")
+            r = Reminder(self._next_id, due, message.strip()[:300], "routine", time.time(),
+                         at=at, days=days, action=action)
+            self._items[r.id] = r
+            self._next_id += 1
+            self._save()
+        self._poke()
+        return r
+
     def cancel(self, reminder_id: int) -> bool:
         with self._lock:
             found = self._items.pop(int(reminder_id), None) is not None
@@ -102,9 +142,17 @@ class ReminderStore:
             now = time.time()
             due = [r for r in self.pending() if r.due <= now]
             for r in due:
+                late = now - r.due
                 with self._lock:
-                    self._items.pop(r.id, None)
+                    if r.days:
+                        # Routine : reprogrammée à la prochaine occurrence, jamais supprimée.
+                        r.due = next_occurrence(r.at, r.days, datetime.fromtimestamp(now)).timestamp()
+                    else:
+                        self._items.pop(r.id, None)
                     self._save()
+                if r.days and late > ROUTINE_GRACE_S:
+                    logger.info(f"Routine #{r.id} manquée ({late / 3600:.1f} h de retard) — reportée")
+                    continue
                 try:
                     await on_due(r)
                 except Exception as e:
@@ -118,7 +166,24 @@ class ReminderStore:
                 pass
 
 
+def describe_days(days: list[int]) -> str:
+    if sorted(days) == list(range(7)):
+        return "tous les jours"
+    if sorted(days) == list(range(5)):
+        return "en semaine"
+    if sorted(days) == [5, 6]:
+        return "le week-end"
+    return ", ".join(DAY_NAMES[d] for d in sorted(days))
+
+
+_ACTION_LABELS = {"briefing": "briefing", "pc_check": "contrôle de santé du PC"}
+
+
 def describe(r: Reminder) -> str:
+    if r.days:
+        what = _ACTION_LABELS.get(r.action) or r.message
+        nxt = datetime.fromtimestamp(r.due)
+        return f"#{r.id} Routine {describe_days(r.days)} à {r.at} — {what} (prochaine : {nxt:%d/%m %H:%M})"
     when = datetime.fromtimestamp(r.due)
     label = "Minuteur" if r.kind == "timer" else "Rappel"
     return f"#{r.id} {label} {when.strftime('%d/%m %H:%M:%S')} — {r.message}"

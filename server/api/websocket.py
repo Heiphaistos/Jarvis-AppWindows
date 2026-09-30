@@ -738,8 +738,13 @@ async def websocket_handler(
                 await manager.send(ws, alert["type"], alert["payload"])
                 if alert["type"] == "reminder" and tts_enabled and tts.is_available:
                     # Rappel annoncé à voix haute, même sans question en cours.
-                    label = "Minuteur terminé" if alert["payload"].get("kind") == "timer" else "Rappel"
-                    audio = await tts.synthesize(f"{label}, Monsieur : {alert['payload'].get('message', '')}")
+                    kind = alert["payload"].get("kind")
+                    message = alert["payload"].get("message", "")
+                    # Une routine (briefing, contrôle PC) est déjà rédigée pour être dite.
+                    spoken = message if kind == "routine" else (
+                        f"{'Minuteur terminé' if kind == 'timer' else 'Rappel'}, Monsieur : {message}"
+                    )
+                    audio = await tts.synthesize(spoken)
                     if audio:
                         await manager.send(ws, "tts_audio", {"audio": audio})
             except asyncio.TimeoutError:

@@ -132,6 +132,8 @@ EMAIL:
 ASSISTANT:
   set_timer(minutes, label="") — minuteur annoncé à voix haute
   set_reminder(when, message) — rappel (« 18:30 », « dans 20 min », « 2026-10-02 09:00 »)
+  set_routine(time, action="briefing", days="tous les jours", message="") — routine récurrente :
+    briefing du matin, pc_check (santé du PC, muet si tout va bien) ou message récurrent
   list_reminders() / cancel_reminder(reminder_id)
   read_webpage(url) — lit le texte d'une page web
   wikipedia_summary(topic, lang="fr") — résumé Wikipédia
