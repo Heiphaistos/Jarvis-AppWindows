@@ -30,6 +30,10 @@ class LLMProvider(ABC):
     @abstractmethod
     def model(self) -> str: ...
 
+    def warm_target(self) -> tuple[str, dict[str, str]] | None:
+        """URL légère (liste des modèles) pour ouvrir la connexion à l'avance, ou None."""
+        return None
+
     @abstractmethod
     def stream(
         self,

@@ -120,11 +120,12 @@ class TTSManager:
                 "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": self._gemini_voice}}},
             },
         }
-        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
-            resp = await client.post(
-                GEMINI_TTS_URL.format(model=GEMINI_TTS_MODEL), json=payload,
-                headers={"x-goog-api-key": key, "Content-Type": "application/json"},
-            )
+        from core.providers.http import shared_client
+        resp = await shared_client().post(
+            GEMINI_TTS_URL.format(model=GEMINI_TTS_MODEL), json=payload,
+            headers={"x-goog-api-key": key, "Content-Type": "application/json"},
+            timeout=httpx.Timeout(15.0, connect=5.0),
+        )
         if resp.status_code != 200:
             raise RuntimeError(f"Gemini TTS HTTP {resp.status_code}: {resp.text[:200]}")
         part = resp.json()["candidates"][0]["content"]["parts"][0]["inlineData"]

@@ -226,11 +226,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         _bd_rem("reminder", {"id": r.id, "kind": r.kind, "message": r.message})
 
     reminder_task = asyncio.create_task(reminders.run(_reminder_due))
+
+    async def _keep_brains_warm() -> None:
+        # Connexions TLS gardées ouvertes vers les cerveaux cloud (1er mot plus rapide).
+        while True:
+            if providers.tier == "cloud":
+                try:
+                    await providers.warmup()
+                except Exception as e:
+                    logger.debug(f"Préchauffage des cerveaux: {e}")
+            await asyncio.sleep(90)
+
+    warm_task = asyncio.create_task(_keep_brains_warm())
     yield  # ← port 8765 ouvert ici, modèles chargent en arrière-plan
     model_task.cancel()
     monitor_task.cancel()
     reminder_task.cancel()
-    for task in (model_task, monitor_task, reminder_task):
+    warm_task.cancel()
+    for task in (model_task, monitor_task, reminder_task, warm_task):
         try:
             await task
         except asyncio.CancelledError:

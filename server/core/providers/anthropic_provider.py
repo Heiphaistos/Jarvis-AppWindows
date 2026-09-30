@@ -4,6 +4,7 @@ from typing import AsyncGenerator, AsyncIterator
 
 import httpx
 
+from core.providers.http import shared_client
 from core.providers.base import LLMProvider, ProviderError, parse_tool_args, tool_tag
 from utils.logger import get_logger
 
@@ -67,6 +68,9 @@ class AnthropicProvider(LLMProvider):
     def model(self) -> str:
         return self._model
 
+    def warm_target(self) -> tuple[str, dict[str, str]] | None:
+        return f"{self._base_url}/v1/models", {"x-api-key": self._api_key, "anthropic-version": _API_VERSION}
+
     async def stream(
         self,
         system: str,
@@ -93,15 +97,15 @@ class AnthropicProvider(LLMProvider):
         }
 
         try:
-            async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-                async with client.stream(
-                    "POST", f"{self._base_url}/v1/messages",
-                    json=payload, headers=headers,
-                ) as resp:
-                    if resp.status_code != 200:
-                        body = (await resp.aread()).decode(errors="replace")[:300]
-                        raise ProviderError(f"{self.label} HTTP {resp.status_code}: {body}")
-                    async for piece in parse_anthropic_sse(resp.aiter_lines(), self.label):
-                        yield piece
+            # Connexion partagée (keep-alive) : pas de nouvelle poignée TLS à chaque message.
+            async with shared_client().stream(
+                "POST", f"{self._base_url}/v1/messages",
+                json=payload, headers=headers, timeout=_TIMEOUT,
+            ) as resp:
+                if resp.status_code != 200:
+                    body = (await resp.aread()).decode(errors="replace")[:300]
+                    raise ProviderError(f"{self.label} HTTP {resp.status_code}: {body}")
+                async for piece in parse_anthropic_sse(resp.aiter_lines(), self.label):
+                    yield piece
         except httpx.HTTPError as e:
             raise ProviderError(f"{self.label} injoignable: {e}") from e
