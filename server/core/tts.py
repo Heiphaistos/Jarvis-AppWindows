@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 import asyncio
 import subprocess
 import base64
@@ -69,6 +70,33 @@ def pcm_to_wav(pcm: bytes, rate: int = 24000, channels: int = 1, width: int = 2)
         w.setframerate(rate)
         w.writeframes(pcm)
     return buf.getvalue()
+
+
+_MD_LINK = re.compile(r"\[([^\]]+)\]\((?:https?://)?[^)]+\)")
+_URL = re.compile(r"https?://\S+|www\.\S+")
+_CITATION = re.compile(r"\s?\[\d+(?:\s*[,–-]\s*\d+)*\]")
+_CODE_BLOCK = re.compile(r"```.*?(?:```|$)", re.S)
+
+
+def speakable(text: str) -> str:
+    """Texte à prononcer : sans markdown, citations [n], URL ni blocs de code.
+
+    Les réponses écrites (recherche, synthèse) gardent leur mise en forme à
+    l'écran ; la voix ne lit ni « astérisque » ni « crochet un ».
+    """
+    t = _CODE_BLOCK.sub(" le code est affiché à l'écran. ", text or "")
+    t = _MD_LINK.sub(r"\1", t)
+    t = _URL.sub("", t)
+    t = _CITATION.sub("", t)
+    t = re.sub(r"`([^`]*)`", r"\1", t)
+    t = re.sub(r"(\*\*|__|\*|~~)", "", t)
+    t = re.sub(r"^\s{0,3}#{1,6}\s*", "", t, flags=re.M)          # titres
+    t = re.sub(r"^\s*(?:[-*•+]|\d+[.)])\s+", "", t, flags=re.M)  # puces et listes
+    t = re.sub(r"^\s*>\s?", "", t, flags=re.M)                     # citations
+    t = re.sub(r"^\s*\|?[\s:|-]+\|?\s*$", "", t, flags=re.M)    # séparateurs de tableau
+    t = t.replace("|", ", ")
+    t = re.sub(r"\s+", " ", t).strip(" ,")
+    return t if re.search(r"[A-Za-zÀ-ÿ0-9]", t) else ""
 
 
 class TTSManager:
@@ -175,7 +203,9 @@ class TTSManager:
         if not self.is_available:
             return None
 
-        text = text[:MAX_TTS_CHARS]
+        text = speakable(text)[:MAX_TTS_CHARS]
+        if not text:
+            return None  # que de la mise en forme (ligne de tableau, séparateur…)
 
         if self._gemini_voice is not None and time.monotonic() >= self._gemini_down_until:
             try:
