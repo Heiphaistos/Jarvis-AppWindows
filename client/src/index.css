@@ -8,7 +8,11 @@
   --jarvis-border: rgba(0, 212, 255, 0.3);
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+/* Reset dans la couche base : hors couche, il écrasait toutes les marges et
+   espacements Tailwind v4 (p-4, mt-3…), les panneaux étaient collés aux bords. */
+@layer base {
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+}
 
 body {
   background: radial-gradient(ellipse 120% 90% at 50% -10%, #0a2140 0%, #041228 55%, #020a16 100%);
@@ -52,3 +56,28 @@ code, pre, .font-mono {
 ::-webkit-scrollbar-thumb:hover { background: rgba(0, 212, 255, 0.4); }
 
 ::selection { background: rgba(0, 212, 255, 0.3); color: #fff; }
+
+/* Coins HUD lumineux sur les panneaux (façon interface d'armure) */
+.hud-corners { position: relative; }
+.hud-corners::before,
+.hud-corners::after {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  border-color: rgba(0, 212, 255, 0.55);
+  border-style: solid;
+}
+.hud-corners::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; border-top-left-radius: 14px; }
+.hud-corners::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; border-bottom-right-radius: 14px; }
+
+/* Titre holographique : léger scintillement */
+@keyframes holo-flicker {
+  0%, 100% { opacity: 1; }
+  47% { opacity: 1; }
+  48% { opacity: 0.72; }
+  49% { opacity: 1; }
+  82% { opacity: 0.9; }
+}
+.holo-title { animation: holo-flicker 6s infinite; }
