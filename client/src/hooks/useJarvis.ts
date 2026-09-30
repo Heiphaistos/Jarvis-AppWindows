@@ -42,5 +42,19 @@ export function useJarvis() {
     }
   }, [isMicActive, activateMic, stopCapture]);
 
-  return { sendText, toggleMic, isMicActive, status };
+  /** Mode LIVE : conversation vocale temps réel avec Gemini (micro ouvert en continu). */
+  const toggleLive = useCallback(async () => {
+    const st = useJarvisStore.getState();
+    if (st.liveActive) {
+      send({ type: "live_stop", payload: {} });
+      stopCapture();
+      st.setMicActive(false);
+      return;
+    }
+    const voice = st.selectedVoice.startsWith("gemini:") ? st.selectedVoice.slice(7) : "Charon";
+    send({ type: "live_start", payload: { voice } });
+    if (!st.isMicActive) await activateMic();
+  }, [send, stopCapture, activateMic]);
+
+  return { sendText, toggleMic, toggleLive, isMicActive, status };
 }

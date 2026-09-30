@@ -585,6 +585,41 @@ async def websocket_handler(
     tts_enabled: bool = True
     wake_detector = None  # lazy — instancié au 1er wake_audio (modèle stateful par connexion)
     query_task: asyncio.Task | None = None  # requête en cours — annulable via stop_generation
+    live = None  # session Gemini Live (conversation vocale temps réel), None hors mode LIVE
+
+    async def _live_send(event_type: str, data: dict) -> None:
+        try:
+            await manager.send(ws, event_type, data)
+        except Exception:
+            pass
+
+    async def _live_tool(name: str, args: dict) -> str:
+        return str(await asyncio.to_thread(tools.execute, name, **args))
+
+    async def _start_live(voice: str) -> None:
+        nonlocal live
+        from core.live import LiveSession
+        from core.tts import GEMINI_VOICES
+        key = providers.api_key("gemini")
+        if not key:
+            await manager.send(ws, "live_state", {
+                "active": False, "error": "Mode LIVE : ajoutez une clé Gemini dans l'onglet CERVEAU.",
+            })
+            return
+        if live is not None:
+            await live.stop()
+        live = LiveSession(
+            api_key=key, send=_live_send, run_tool=_live_tool,
+            system=build_system_prompt("cloud", ""),
+            tools=tools.schemas(),
+            voice=voice if voice in GEMINI_VOICES else "Charon",
+        )
+        try:
+            await live.start()
+        except Exception as e:
+            logger.warning(f"Gemini Live indisponible: {e}")
+            await live.stop(error=f"Gemini Live indisponible : {str(e)[:160]}")
+            live = None
 
     async def _run_query(coro) -> None:
         """Exécute une requête en tâche de fond ; garantit le retour à idle
@@ -618,7 +653,13 @@ async def websocket_handler(
             event_type: str = event.get("type", "")
             payload: dict = event.get("payload", {})
 
-            if event_type == "text_query":
+            if event_type == "text_query" and live is not None and live.active:
+                # Texte tapé pendant une session LIVE : réponse vocale de Gemini.
+                text = str(payload.get("text", "")).strip()[:MAX_TEXT_CHARS]
+                if text:
+                    await live.send_text(text)
+
+            elif event_type == "text_query":
                 if not _rate_limiter.allow_text(ws_id):
                     await manager.send(ws, "error", {"message": "Trop de requêtes. Patientez une minute."})
                     continue
@@ -635,6 +676,22 @@ async def websocket_handler(
                 else:
                     coro = handle_text_query(ws, text, providers, memory, tts, tools, tts_enabled)
                 query_task = asyncio.create_task(_run_query(coro))
+
+            elif event_type == "live_start":
+                await _start_live(str(payload.get("voice", "Charon")))
+
+            elif event_type == "live_stop":
+                if live is not None:
+                    await live.stop()
+                    live = None
+
+            elif event_type == "audio_chunk" and live is not None and live.active:
+                # Mode LIVE : le micro part directement vers Gemini (pas de Whisper).
+                if not _rate_limiter.allow_audio(ws_id):
+                    continue
+                chunk_data = payload.get("data")
+                if isinstance(chunk_data, list) and chunk_data:
+                    await live.send_audio(chunk_data, int(payload.get("sampleRate", 16000)))
 
             elif event_type == "stop_generation":
                 if query_task is not None and not query_task.done():
@@ -784,6 +841,8 @@ async def websocket_handler(
     finally:
         if query_task is not None and not query_task.done():
             query_task.cancel()
+        if live is not None:
+            await live.stop()
         alert_task.cancel()
         _monitor_unsubscribe(alert_queue)
         _rate_limiter.cleanup(ws_id)

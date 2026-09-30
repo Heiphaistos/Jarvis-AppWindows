@@ -159,6 +159,47 @@ function ttsPlaybackRate(): number {
   return v.startsWith("edge:") || v.startsWith("gemini:") ? 1.0 : 1.04;
 }
 
+// ── Mode LIVE : flux PCM 16 bits de Gemini, joué sans trou ni recouvrement ──
+let _liveNextTime = 0;
+let _liveSources: AudioBufferSourceNode[] = [];
+let _liveChain: AudioNode | null = null;
+
+async function playLivePcm(b64: string, rate: number, onIdle: () => void) {
+  const ctx = await getAudioContext();
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length - (bin.length % 2));
+  for (let i = 0; i < bytes.length; i++) bytes[i] = bin.charCodeAt(i);
+  const pcm = new Int16Array(bytes.buffer);
+  if (!pcm.length) return;
+  const buffer = ctx.createBuffer(1, pcm.length, rate);
+  const channel = buffer.getChannelData(0);
+  for (let i = 0; i < pcm.length; i++) channel[i] = pcm[i] / 32768;
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  if (!_liveChain) _liveChain = buildJarvisChain(ctx);
+  source.connect(_liveChain);
+  // Chaque morceau démarre exactement à la fin du précédent (petite avance de 40 ms au départ).
+  const start = Math.max(ctx.currentTime + 0.04, _liveNextTime);
+  source.start(start);
+  _liveNextTime = start + buffer.duration;
+  _liveSources.push(source);
+  source.onended = () => {
+    _liveSources = _liveSources.filter((s) => s !== source);
+    if (_liveSources.length === 0) onIdle();
+  };
+}
+
+function stopLivePlayback() {
+  for (const s of _liveSources) {
+    try { s.stop(); } catch { /* déjà terminé */ }
+  }
+  _liveSources = [];
+  _liveNextTime = 0;
+}
+
+let _liveUserMsg: string | null = null;
+let _liveAssistantMsg: string | null = null;
+
 async function playTtsAudio(b64: string, onDone: () => void) {
   let timeoutId: number | undefined;
   try {
@@ -257,6 +298,8 @@ interface JarvisState {
   lastBrain: BrainRoute | null;
   /** Cerveau qui a ouvert chaque réponse (id du message → routage). */
   messageBrains: Record<string, BrainRoute>;
+  /** Conversation vocale temps réel Gemini Live en cours. */
+  liveActive: boolean;
   agentSteps: AgentStep[];
   bootDone: boolean;
   wakeWordEnabled: boolean;
@@ -314,6 +357,7 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
   providerModel: "",
   lastBrain: null,
   messageBrains: {},
+  liveActive: false,
   agentSteps: [],
   bootDone: false,
   wakeWordEnabled: localStorage.getItem("jarvis_wake_word") === "1",
@@ -545,6 +589,50 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
           content: `${kind === "timer" ? "⏱ Minuteur terminé" : "⏰ Rappel"} — ${message}`,
           timestamp: Date.now(),
         });
+        break;
+      }
+      case "live_state": {
+        const { active, error } = event.payload;
+        set({ liveActive: active });
+        if (!active) {
+          stopLivePlayback();
+          _liveUserMsg = _liveAssistantMsg = null;
+          set({ status: "idle" });
+        } else {
+          set({ status: "listening" });
+        }
+        if (error) {
+          get().addMessage({ id: crypto.randomUUID(), role: "system", content: `⚠ ${error}`, timestamp: Date.now() });
+        }
+        break;
+      }
+      case "live_audio": {
+        set({ status: "speaking" });
+        void playLivePcm(event.payload.audio, event.payload.rate, () => {
+          if (get().liveActive) set({ status: "listening" });
+        });
+        break;
+      }
+      case "live_interrupted": {
+        stopLivePlayback();
+        if (get().liveActive) set({ status: "listening" });
+        break;
+      }
+      case "live_transcript": {
+        const { role, text } = event.payload;
+        const current = role === "user" ? _liveUserMsg : _liveAssistantMsg;
+        if (current && get().messages.some((m) => m.id === current)) {
+          get().appendToken(current, text);
+        } else {
+          const id = crypto.randomUUID();
+          get().addMessage({ id, role, content: text.trimStart(), timestamp: Date.now() });
+          if (role === "user") _liveUserMsg = id;
+          else _liveAssistantMsg = id;
+        }
+        break;
+      }
+      case "live_turn_complete": {
+        _liveUserMsg = _liveAssistantMsg = null;
         break;
       }
       case "brain": {
