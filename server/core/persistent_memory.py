@@ -20,6 +20,11 @@ _instance: "PersistentMemory | None" = None
 _CORE_CATEGORIES = {"identite", "preferences"}
 
 
+def _keywords(text: str) -> set[str]:
+    """Mots significatifs (4 lettres et plus) pour le classement par pertinence."""
+    return {w for w in re.findall(r"[a-zà-ÿ0-9]{4,}", (text or "").lower())}
+
+
 def get_memory() -> "PersistentMemory":
     global _instance
     if _instance is None:
@@ -136,16 +141,24 @@ class PersistentMemory:
             self._conn.commit()
         logger.info(f"Leçon enregistrée: {lesson[:80]}")
 
-    def get_lessons_summary(self, limit: int = 8) -> str:
-        """Dernières leçons pour injection dans le system prompt."""
+    def get_lessons_summary(self, limit: int = 8, query: str = "") -> str:
+        """Leçons pour le system prompt : les plus pertinentes pour la demande,
+        complétées par les plus récentes."""
         with self._lock:
             rows = self._conn.execute(
-                "SELECT lesson FROM lessons ORDER BY created_at DESC LIMIT ?", (limit,)
+                "SELECT lesson, context FROM lessons ORDER BY created_at DESC LIMIT 200"
             ).fetchall()
         if not rows:
             return ""
+        words = _keywords(query)
+
+        def score(r) -> int:
+            text = f"{r['lesson']} {r['context']}".lower()
+            return sum(1 for w in words if w in text)
+
+        chosen = sorted(rows, key=score, reverse=True)[:limit] if words else rows[:limit]
         lines = ["\n\n## LEÇONS APPRISES (erreurs passées à ne pas répéter)\n"]
-        lines += [f"- {r['lesson']}" for r in rows]
+        lines += [f"- {r['lesson']}" for r in chosen]
         return "\n".join(lines)
 
     def lessons(self, limit: int = 50) -> list[dict]:
@@ -161,13 +174,57 @@ class PersistentMemory:
             self._conn.commit()
         return bool(cur.rowcount)
 
-    def add_episode(self, summary: str) -> None:
+    def save_episode(self, summary: str, episode_id: int | None = None) -> int:
+        """Crée ou met à jour le résumé d'une conversation. Retourne son id."""
         now = datetime.utcnow().isoformat()
         with self._lock:
-            self._conn.execute(
-                "INSERT INTO episodes(summary, created_at) VALUES(?, ?)", (summary, now)
+            if episode_id is not None:
+                cur = self._conn.execute(
+                    "UPDATE episodes SET summary = ?, created_at = ? WHERE id = ?",
+                    (summary.strip(), now, episode_id),
+                )
+                if cur.rowcount:
+                    self._conn.commit()
+                    return episode_id
+            cur = self._conn.execute(
+                "INSERT INTO episodes(summary, created_at) VALUES(?, ?)", (summary.strip(), now)
             )
             self._conn.commit()
+            return int(cur.lastrowid)
+
+    def add_episode(self, summary: str) -> None:
+        self.save_episode(summary)
+
+    def episodes(self, query: str = "", limit: int = 5) -> list[dict]:
+        """Conversations passées, les plus récentes d'abord ; filtrées par mots-clés si query."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, summary, created_at FROM episodes ORDER BY created_at DESC LIMIT 500"
+            ).fetchall()
+        items = [dict(r) for r in rows]
+        words = _keywords(query)
+        if words:
+            scored = [(sum(1 for w in words if w in e["summary"].lower()), e) for e in items]
+            items = [e for s, e in sorted(scored, key=lambda x: -x[0]) if s > 0]
+        return items[:limit]
+
+    def forget_episode(self, episode_id: int) -> bool:
+        with self._lock:
+            cur = self._conn.execute("DELETE FROM episodes WHERE id = ?", (episode_id,))
+            self._conn.commit()
+        return bool(cur.rowcount)
+
+    def get_episodes_summary(self, query: str = "", limit: int = 3) -> str:
+        """Conversations récentes (et pertinentes) pour le system prompt."""
+        recent = self.episodes(limit=limit)
+        relevant = self.episodes(query, limit=2) if query else []
+        chosen = {e["id"]: e for e in relevant + recent}
+        if not chosen:
+            return ""
+        lines = ["\n\n## CONVERSATIONS PASSÉES (résumés)\n"]
+        for e in sorted(chosen.values(), key=lambda e: e["created_at"], reverse=True)[:limit + 2]:
+            lines.append(f"- [{e['created_at'][:10]}] {e['summary']}")
+        return "\n".join(lines)
 
     def forget(self, key: str) -> bool:
         """Supprime un souvenir par clé exacte. True si quelque chose a été oublié."""
@@ -209,7 +266,7 @@ class PersistentMemory:
         rows = self.facts()
         if not rows:
             return ""
-        words = {w for w in re.findall(r"[a-zà-ÿ0-9]{4,}", (query or "").lower())}
+        words = _keywords(query)
 
         def score(r: dict) -> int:
             s = 0
