@@ -1,20 +1,15 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useRef } from "react";
+import { motion } from "framer-motion";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Trash2, Volume2, VolumeX, MicOff } from "lucide-react";
 import { ChatPanel } from "./components/ChatPanel/ChatPanel";
 import { CommandInput } from "./components/CommandInput/CommandInput";
 import { SettingsPanel } from "./components/Settings/SettingsPanel";
 import { BootSequence } from "./components/Boot/BootSequence";
 import { VoiceOrb } from "./components/VoiceOrb/VoiceOrb";
-
-// three.js chargé en différé — n'alourdit pas le démarrage
-const JarvisScene = lazy(() =>
-  import("./components/Scene/JarvisScene").then((m) => ({ default: m.JarvisScene }))
-);
-import { AgentSteps } from "./components/AgentSteps/AgentSteps";
-import { useJarvisStore, accentOf } from "./stores/jarvisStore";
-import type { JarvisStatus } from "./types";
+import { CoreStage } from "./components/Hud/CoreStage";
+import { TelemetryRail } from "./components/Hud/TelemetryRail";
+import { useAccent } from "./components/Hud/status";
+import { useJarvisStore } from "./stores/jarvisStore";
 
 function HexGrid() {
   return (
@@ -59,273 +54,6 @@ function Corner({ pos }: { pos: "tl" | "tr" | "bl" | "br" }) {
       <svg width="24" height="24" viewBox="0 0 24 24">
         <path d="M2 14 L2 2 L14 2" fill="none" stroke="#00d4ff" strokeWidth="1.5" opacity="0.6" />
       </svg>
-    </div>
-  );
-}
-
-function MetricBar({ label, value }: { label: string; value: number | null }) {
-  const pct = value ?? 0;
-  const color = pct > 88 ? "#ff5555" : pct > 70 ? "#ffaa00" : "#00d4ff";
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-[8px] tracking-widest text-blue-400/40 w-8 shrink-0">{label}</span>
-      <div className="flex-1 h-[5px] rounded-full overflow-hidden" style={{ background: "rgba(0,60,100,0.35)" }}>
-        <motion.div
-          className="h-full rounded-full"
-          style={{ background: `linear-gradient(90deg, ${color}77, ${color})`, boxShadow: `0 0 6px ${color}66` }}
-          animate={{ width: `${Math.min(pct, 100)}%` }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
-        />
-      </div>
-      <span className="text-[9px] font-mono w-9 text-right shrink-0" style={{ color: `${color}cc` }}>
-        {value === null ? "—" : `${Math.round(pct)}%`}
-      </span>
-    </div>
-  );
-}
-
-function DataReadout({ label, value, color = "#00d4ff" }: { label: string; value: string; color?: string }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[9px] tracking-widest opacity-40" style={{ color }}>
-        {label}
-      </span>
-      <span className="text-[11px] font-mono tracking-wider" style={{ color, textShadow: `0 0 8px ${color}88` }}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function LeftPanel() {
-  const status = useJarvisStore((s) => s.status);
-  const isConnected = useJarvisStore((s) => s.isConnected);
-  const ttsEnabled = useJarvisStore((s) => s.ttsEnabled);
-  const setTtsEnabled = useJarvisStore((s) => s.setTtsEnabled);
-  const wsSend = useJarvisStore((s) => s.wsSend);
-  const clearMessages = useJarvisStore((s) => s.clearMessages);
-  const sttAvailable = useJarvisStore((s) => s.sttAvailable);
-  const llmAvailable = useJarvisStore((s) => s.llmAvailable);
-  const providerLabel = useJarvisStore((s) => s.providerLabel);
-  const providerModel = useJarvisStore((s) => s.providerModel);
-  const lastBrain = useJarvisStore((s) => s.lastBrain);
-  const metrics = useJarvisStore((s) => s.metrics);
-
-  const toggleMute = () => {
-    const next = !ttsEnabled;
-    setTtsEnabled(next);
-    wsSend?.({ type: "set_tts", payload: { enabled: next } });
-  };
-
-  // Fetch real hardware info from server
-  const [hwInfo, setHwInfo] = useState({ gpu: "—", vram: "—", cuda: "—" });
-  useEffect(() => {
-    if (!isConnected) return;
-    fetch("http://127.0.0.1:8765/api/system_info")
-      .then((r) => r.json())
-      .then((d: { info: string }) => {
-        const info = d.info;
-        const gpuMatch = info.match(/GPU: ([^|]+)/);
-        const vramMatch = info.match(/VRAM: (\d+)\/(\d+)/);
-        setHwInfo({
-          gpu: gpuMatch ? gpuMatch[1].trim() : "—",
-          vram: vramMatch ? `${vramMatch[2]} MB` : "—",
-          cuda: "CUDA",
-        });
-      })
-      .catch(() => {/* server offline */});
-  }, [isConnected]);
-
-  // Fetch memory count from server
-  const [memCount, setMemCount] = useState(0);
-  useEffect(() => {
-    if (!isConnected) return;
-    fetch("http://127.0.0.1:8765/api/memories/count")
-      .then((r) => r.json())
-      .then((d: { count: number }) => setMemCount(d.count))
-      .catch(() => {});
-  }, [isConnected]);
-
-  const theme = useJarvisStore((s) => s.theme);
-  const customAccent = useJarvisStore((s) => s.customAccent);
-  const statusColors: Record<JarvisStatus, string> = {
-    idle: accentOf(theme, customAccent),
-    standby: "#3388cc",
-    listening: "#00ff88",
-    processing: "#ffaa00",
-    speaking: "#8866ff",
-    error: "#ff3333",
-  };
-  const statusLabels: Record<JarvisStatus, string> = {
-    idle: "PRÊT",
-    standby: "VEILLE — « HEY JARVIS »",
-    listening: "ÉCOUTE",
-    processing: "ANALYSE",
-    speaking: "PAROLE",
-    error: "ERREUR",
-  };
-  const col = statusColors[status];
-
-  return (
-    <div className="w-72 flex flex-col relative glass-panel rounded-2xl overflow-hidden">
-      {/* Top data strip */}
-      <div className="px-4 pt-3 pb-2 border-b border-cyan-900/20 flex flex-col gap-2">
-        <div className="flex justify-between items-start">
-          <DataReadout label="PROCESSEUR" value={hwInfo.gpu.length > 12 ? hwInfo.gpu.slice(0, 12) + "…" : hwInfo.gpu} />
-          <DataReadout label="VRAM" value={hwInfo.vram} />
-          <DataReadout label="MOTEUR" value={hwInfo.cuda} />
-        </div>
-        {/* Métriques temps réel (poussées toutes les 3 s par le serveur) */}
-        <div className="flex flex-col gap-1.5 pt-1">
-          <MetricBar label="CPU" value={metrics.cpu} />
-          <MetricBar label="RAM" value={metrics.ram} />
-          <MetricBar label="GPU" value={metrics.gpu} />
-          <MetricBar label="VRAM" value={metrics.vram} />
-        </div>
-      </div>
-
-      {/* Hologramme 3D animé — premier plan, remplace l'ancien visualiseur 2D */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-4 py-4">
-        <div className="relative w-full flex-1 min-h-[220px]">
-          <motion.div
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 rounded-full pointer-events-none"
-            style={{
-              boxShadow: `0 0 40px ${col}33, 0 0 90px ${col}18`,
-            }}
-            animate={{ opacity: [0.5, 1, 0.5] }}
-            transition={{ duration: 2, repeat: Infinity }}
-          />
-          <Suspense fallback={null}>
-            <JarvisScene />
-          </Suspense>
-        </div>
-
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={status}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            className="flex flex-col items-center gap-1"
-          >
-            <div
-              className="flex items-center gap-1.5 px-3 py-1 rounded border text-xs tracking-widest font-bold"
-              style={{
-                color: col,
-                borderColor: `${col}44`,
-                background: `${col}11`,
-                textShadow: `0 0 10px ${col}`,
-              }}
-            >
-              <motion.span
-                animate={["listening", "processing", "speaking"].includes(status) ? { opacity: [1, 0, 1] } : {}}
-                transition={{ duration: 0.8, repeat: Infinity }}
-                className="w-1.5 h-1.5 rounded-full"
-                style={{ background: col, boxShadow: `0 0 6px ${col}` }}
-              />
-              {statusLabels[status]}
-            </div>
-          </motion.div>
-        </AnimatePresence>
-      </div>
-
-      {/* Warnings: STT / LLM unavailable */}
-      {isConnected && (!sttAvailable || !llmAvailable) && (
-        <div className="px-4 pb-1 flex flex-col gap-1">
-          {!sttAvailable && (
-            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded text-[9px] tracking-wider"
-              style={{ background: "rgba(255,170,0,0.08)", border: "1px solid rgba(255,170,0,0.25)", color: "#ffaa00" }}>
-              <MicOff size={10} />
-              Microphone STT indisponible — modèle Whisper non chargé
-            </div>
-          )}
-          {!llmAvailable && (
-            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded text-[9px] tracking-wider"
-              style={{ background: "rgba(255,60,60,0.08)", border: "1px solid rgba(255,60,60,0.25)", color: "#ff6666" }}>
-              ⚠ LLM indisponible — fichier .gguf manquant dans server/models/
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Mute button — always visible */}
-      <div className="px-4 pb-2">
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.96 }}
-          onClick={toggleMute}
-          className="w-full flex items-center justify-center gap-2 py-2 rounded transition-all"
-          style={{
-            background: ttsEnabled ? "rgba(0,212,255,0.08)" : "rgba(255,60,60,0.08)",
-            border: `1px solid ${ttsEnabled ? "rgba(0,212,255,0.25)" : "rgba(255,60,60,0.25)"}`,
-            color: ttsEnabled ? "#00d4ff" : "#ff4444",
-            boxShadow: ttsEnabled ? "0 0 16px #00d4ff18" : "0 0 16px #ff444418",
-          }}
-        >
-          <motion.div
-            animate={ttsEnabled ? { scale: [1, 1.1, 1] } : {}}
-            transition={{ duration: 2, repeat: Infinity }}
-          >
-            {ttsEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
-          </motion.div>
-          <span className="text-[10px] tracking-widest font-bold">
-            {ttsEnabled ? "VOIX ACTIVE" : "VOIX COUPÉE"}
-          </span>
-          {ttsEnabled && (
-            <motion.div
-              className="w-1 h-1 rounded-full"
-              style={{ background: "#00d4ff" }}
-              animate={{ opacity: [1, 0.2, 1] }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-            />
-          )}
-        </motion.button>
-      </div>
-
-      {/* Bottom data strip */}
-      <div className="px-4 py-3 border-t border-cyan-900/20 flex flex-col gap-2">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-          <DataReadout label="CONNEXION" value={isConnected ? "ACTIVE" : "COUPÉE"} color={isConnected ? "#00ff88" : "#ff3333"} />
-          <DataReadout label="PROTOCOLE" value="WS-8765" />
-          <DataReadout label="MÉMOIRE" value={`${memCount} FACTS`} />
-          <DataReadout
-            label="CERVEAU"
-            value={(lastBrain?.model || providerModel || providerLabel).toUpperCase().slice(0, 16)}
-          />
-          {lastBrain && (
-            <DataReadout
-              label={`NIVEAU ${lastBrain.level.toUpperCase()}`}
-              value={`1ER MOT ${lastBrain.ttftMs} MS`}
-              color={lastBrain.ttftMs < 600 ? "#00ff88" : lastBrain.ttftMs < 1500 ? "#ffcc44" : "#ff8844"}
-            />
-          )}
-        </div>
-        {/* Clear history button */}
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={clearMessages}
-          className="mt-1 flex items-center justify-center gap-1.5 py-1.5 rounded text-[9px] tracking-widest transition-all"
-          style={{
-            color: "#ff444466",
-            border: "1px solid #ff444420",
-            background: "transparent",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.color = "#ff4444";
-            (e.currentTarget as HTMLElement).style.borderColor = "#ff444440";
-            (e.currentTarget as HTMLElement).style.background = "#ff444410";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.color = "#ff444466";
-            (e.currentTarget as HTMLElement).style.borderColor = "#ff444420";
-            (e.currentTarget as HTMLElement).style.background = "transparent";
-          }}
-        >
-          <Trash2 size={10} />
-          EFFACER L'HISTORIQUE
-        </motion.button>
-      </div>
     </div>
   );
 }
@@ -382,6 +110,7 @@ function WindowControls() {
 
 function Header() {
   const isConnected = useJarvisStore((s) => s.isConnected);
+  const accent = useAccent();
   const timeRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
@@ -422,8 +151,8 @@ function Header() {
 
       <div className="absolute left-1/2 -translate-x-1/2 text-center pointer-events-none">
         <h1
-          className="text-2xl font-bold tracking-[0.6em] text-cyan-400"
-          style={{ textShadow: "0 0 20px #00d4ff, 0 0 50px #00d4ff66, 0 0 80px #00d4ff33" }}
+          className="holo-title text-2xl font-bold tracking-[0.6em]"
+          style={{ color: accent, textShadow: `0 0 20px ${accent}, 0 0 50px ${accent}66, 0 0 80px ${accent}33` }}
         >
           J.A.R.V.I.S.
         </h1>
@@ -491,12 +220,13 @@ export default function App() {
       <Header />
 
       <div className={`flex-1 flex overflow-hidden relative z-10 gap-3 px-3 pb-3 pt-1 ${layoutSide === "right" ? "flex-row-reverse" : ""}`}>
-        <LeftPanel />
+        <div className="hidden xl:flex"><TelemetryRail /></div>
 
-        <div className="flex-1 flex flex-col relative glass-panel rounded-2xl overflow-hidden">
+        <div className="hidden md:flex flex-1 min-w-0"><CoreStage /></div>
+
+        <div className="w-full md:w-[440px] 2xl:w-[540px] shrink-0 flex flex-col relative glass-panel rounded-2xl overflow-hidden hud-corners">
           <ChatAreaFrame />
           <ChatPanel />
-          <AgentSteps />
           <CommandInput />
         </div>
       </div>
