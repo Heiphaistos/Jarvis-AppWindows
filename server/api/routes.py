@@ -37,7 +37,7 @@ class GmailStatusResponse(BaseModel):
 
 @router.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
-    return HealthResponse(status="ok", version="4.6.0")
+    return HealthResponse(status="ok", version="4.7.0")
 
 
 @router.get("/memories/count")
@@ -95,6 +95,9 @@ class ProviderConfigRequest(BaseModel):
     model: str | None = None
     base_url: str | None = None
     activate: bool = False
+    # Mode AUTO : chaînes de cerveaux par niveau (instant/standard/deep) et course au 1er token
+    chains: dict[str, list[str]] | None = None
+    hedging: bool | None = None
 
 
 @router.get("/providers")
@@ -109,7 +112,11 @@ async def providers_configure(req: ProviderConfigRequest) -> dict:
     """Configure et/ou active un provider LLM. Localhost uniquement (bind 127.0.0.1)."""
     from core.providers import get_provider_manager
     pm = get_provider_manager()
-    if req.name != "local" and any(
+    if req.chains is not None or req.hedging is not None:
+        error = pm.set_routing(req.chains, req.hedging)
+        if error:
+            raise HTTPException(status_code=400, detail=error)
+    if req.name not in ("local", "auto") and any(
         v is not None for v in (req.api_key, req.model, req.base_url)
     ):
         error = pm.configure(req.name, {

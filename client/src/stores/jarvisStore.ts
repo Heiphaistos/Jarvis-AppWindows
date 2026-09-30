@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { AgentStep, JarvisStatus, Message, ServerEvent } from "../types";
+import type { AgentStep, BrainRoute, JarvisStatus, Message, ServerEvent } from "../types";
 
 const MAX_MESSAGES = 200;
 const MAX_AGENT_STEPS = 30;
@@ -136,6 +136,10 @@ function _stored<T extends string>(key: string, valid: readonly T[], fallback: T
 }
 
 const MALE_VOICES = new Set([
+  "gemini:Charon",
+  "gemini:Orus",
+  "gemini:Iapetus",
+  "gemini:Algenib",
   "edge:fr-FR-HenriNeural",
   "edge:fr-FR-RemyMultilingualNeural",
   "fr_FR-upmc-medium",
@@ -151,7 +155,8 @@ function _initialVoice(): string {
 function ttsPlaybackRate(): number {
   // +4 % de pitch : uniquement pour Piper (rend le synthétique plus net).
   // Les voix neurales Edge sont naturelles — ne pas les dénaturer.
-  return useJarvisStore.getState().selectedVoice.startsWith("edge:") ? 1.0 : 1.04;
+  const v = useJarvisStore.getState().selectedVoice;
+  return v.startsWith("edge:") || v.startsWith("gemini:") ? 1.0 : 1.04;
 }
 
 async function playTtsAudio(b64: string, onDone: () => void) {
@@ -248,6 +253,8 @@ interface JarvisState {
   llmAvailable: boolean;
   providerLabel: string;
   providerModel: string;
+  /** Dernier cerveau utilisé (mode AUTO) : niveau, modèle, latence du 1er mot. */
+  lastBrain: BrainRoute | null;
   agentSteps: AgentStep[];
   bootDone: boolean;
   wakeWordEnabled: boolean;
@@ -303,6 +310,7 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
   llmAvailable: false,
   providerLabel: "Local (Mistral GGUF)",
   providerModel: "",
+  lastBrain: null,
   agentSteps: [],
   bootDone: false,
   wakeWordEnabled: localStorage.getItem("jarvis_wake_word") === "1",
@@ -526,6 +534,10 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
         // Les tool_results sont gérés silencieusement (le LLM en parle dans sa réponse)
         break;
 
+      case "brain": {
+        set({ lastBrain: event.payload });
+        break;
+      }
       case "agent_step": {
         const { phase, detail } = event.payload;
         if (phase === "done") {

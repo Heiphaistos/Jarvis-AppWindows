@@ -6,7 +6,10 @@ import tempfile
 import time
 import re as _re
 from pathlib import Path
-from typing import TYPE_CHECKING
+import io
+import os
+import wave
+from typing import TYPE_CHECKING, Callable
 from utils.logger import get_logger
 
 _SENTENCE_END = _re.compile(r'(?<=[.!?…»])\s+|(?<=[.!?…»])$')
@@ -43,6 +46,31 @@ def _male_speaker_id(voice_path: Path) -> int | None:
     return None
 
 
+# Gemini TTS : voix neurales expressives, pilotables par une consigne de ton.
+# Voix masculines graves adaptées à JARVIS : Charon, Orus, Iapetus, Algenib…
+GEMINI_TTS_MODEL = os.environ.get("JARVIS_GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
+GEMINI_TTS_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+GEMINI_VOICES = ("Charon", "Orus", "Iapetus", "Algenib", "Alnilam", "Rasalgethi", "Sadaltager", "Schedar")
+# Consigne de jeu : majordome IA, calme, posé, légèrement pince-sans-rire.
+# Vide = aucune consigne (JARVIS_GEMINI_TTS_STYLE="").
+GEMINI_TTS_STYLE = os.environ.get(
+    "JARVIS_GEMINI_TTS_STYLE",
+    "Lis le texte suivant d'une voix grave, calme et posée, avec l'élégance flegmatique "
+    "d'un majordome britannique et une pointe d'ironie bienveillante : ",
+)
+
+
+def pcm_to_wav(pcm: bytes, rate: int = 24000, channels: int = 1, width: int = 2) -> bytes:
+    """Enveloppe du PCM 16 bits brut (sortie Gemini) dans un WAV décodable par WebAudio."""
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(channels)
+        w.setsampwidth(width)
+        w.setframerate(rate)
+        w.writeframes(pcm)
+    return buf.getvalue()
+
+
 class TTSManager:
     """Deux moteurs : Edge-TTS (voix neurales naturelles, en ligne) et Piper
     (local). Si la voix active est Edge et que le réseau échoue, bascule
@@ -56,6 +84,9 @@ class TTSManager:
         self._speaker: int | None = _male_speaker_id(settings.piper_voice)
         self._edge_voice: str | None = None
         self._edge_down_until: float = 0.0
+        self._gemini_voice: str | None = None
+        self._gemini_down_until: float = 0.0
+        self._gemini_key: Callable[[], str] = lambda: ""
         self._piper_ok = self._piper_exe.exists() and self._voice.exists()
         if not self._piper_ok:
             logger.warning(
@@ -64,10 +95,46 @@ class TTSManager:
 
     @property
     def is_available(self) -> bool:
-        return self._piper_ok or self._edge_voice is not None
+        return self._piper_ok or self._edge_voice is not None or self._gemini_voice is not None
+
+    def set_key_provider(self, getter: Callable[[], str]) -> None:
+        """Source de la clé Gemini (celle du cerveau Gemini, stockée côté serveur)."""
+        self._gemini_key = getter
+
+    def set_gemini_voice(self, voice_name: str) -> None:
+        """Active une voix Gemini TTS ; Edge Henri puis Piper servent de secours."""
+        self.set_edge_voice("fr-FR-HenriNeural")  # secours masculin cohérent
+        self._gemini_voice = voice_name
+        self._gemini_down_until = 0.0
+        logger.info(f"Voix TTS : Gemini {voice_name} (secours Edge Henri puis Piper)")
+
+    async def _synthesize_gemini(self, text: str) -> str:
+        import httpx
+        key = self._gemini_key()
+        if not key:
+            raise RuntimeError("clé Gemini absente (onglet CERVEAU)")
+        payload = {
+            "contents": [{"parts": [{"text": f"{GEMINI_TTS_STYLE}{text}"}]}],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": self._gemini_voice}}},
+            },
+        }
+        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
+            resp = await client.post(
+                GEMINI_TTS_URL.format(model=GEMINI_TTS_MODEL), json=payload,
+                headers={"x-goog-api-key": key, "Content-Type": "application/json"},
+            )
+        if resp.status_code != 200:
+            raise RuntimeError(f"Gemini TTS HTTP {resp.status_code}: {resp.text[:200]}")
+        part = resp.json()["candidates"][0]["content"]["parts"][0]["inlineData"]
+        mime = str(part.get("mimeType", ""))
+        rate = int(_re.search(r"rate=(\d+)", mime).group(1)) if "rate=" in mime else 24000
+        return base64.b64encode(pcm_to_wav(base64.b64decode(part["data"]), rate=rate)).decode()
 
     def set_voice(self, voice_path: Path) -> None:
         self._edge_voice = None
+        self._gemini_voice = None
         self._voice = voice_path
         self._speaker = _male_speaker_id(voice_path)
         self._piper_ok = self._piper_exe.exists() and voice_path.exists()
@@ -75,6 +142,7 @@ class TTSManager:
 
     def set_edge_voice(self, voice_name: str) -> None:
         """Active une voix neurale Edge-TTS (ex. fr-FR-HenriNeural)."""
+        self._gemini_voice = None
         self._edge_voice = voice_name
         # Le secours Piper doit rester cohérent avec la voix Edge (masculine) —
         # jamais de bascule vers une voix féminine choisie précédemment.
@@ -107,6 +175,14 @@ class TTSManager:
             return None
 
         text = text[:MAX_TTS_CHARS]
+
+        if self._gemini_voice is not None and time.monotonic() >= self._gemini_down_until:
+            try:
+                return await asyncio.wait_for(self._synthesize_gemini(text), timeout=12)
+            except Exception as e:
+                # Quota, clé absente ou réseau : Edge/Piper pendant 2 min, voix cohérente.
+                self._gemini_down_until = time.monotonic() + 120.0
+                logger.warning(f"Gemini TTS indisponible ({e}) — secours Edge/Piper 2 min")
 
         if self._edge_voice is not None and time.monotonic() >= self._edge_down_until:
             # 2 tentatives : Microsoft coupe parfois les connexions en rafale

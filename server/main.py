@@ -69,6 +69,8 @@ _init_memory()
 from core.providers import init_provider_manager
 from core.persistent_memory import _DB_PATH as _MEM_DB_PATH
 providers = init_provider_manager(llm, _MEM_DB_PATH.parent)
+# La voix Gemini réutilise la clé du cerveau Gemini (onglet CERVEAU).
+tts.set_key_provider(lambda: providers.api_key("gemini"))
 
 
 def _vram_pct() -> float | None:
@@ -227,7 +229,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("JARVIS arrêté.")
 
 
-app = FastAPI(title="JARVIS Core", version="4.6.0", lifespan=lifespan)
+app = FastAPI(title="JARVIS Core", version="4.7.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:1420", "http://127.0.0.1:1420", "tauri://localhost"],

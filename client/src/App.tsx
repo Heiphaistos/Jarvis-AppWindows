@@ -108,6 +108,7 @@ function LeftPanel() {
   const llmAvailable = useJarvisStore((s) => s.llmAvailable);
   const providerLabel = useJarvisStore((s) => s.providerLabel);
   const providerModel = useJarvisStore((s) => s.providerModel);
+  const lastBrain = useJarvisStore((s) => s.lastBrain);
   const metrics = useJarvisStore((s) => s.metrics);
 
   const toggleMute = () => {
@@ -289,8 +290,15 @@ function LeftPanel() {
           <DataReadout label="MÉMOIRE" value={`${memCount} FACTS`} />
           <DataReadout
             label="CERVEAU"
-            value={(providerModel || providerLabel).toUpperCase().slice(0, 16)}
+            value={(lastBrain?.model || providerModel || providerLabel).toUpperCase().slice(0, 16)}
           />
+          {lastBrain && (
+            <DataReadout
+              label={`NIVEAU ${lastBrain.level.toUpperCase()}`}
+              value={`1ER MOT ${lastBrain.ttftMs} MS`}
+              color={lastBrain.ttftMs < 600 ? "#00ff88" : lastBrain.ttftMs < 1500 ? "#ffcc44" : "#ff8844"}
+            />
+          )}
         </div>
         {/* Clear history button */}
         <motion.button
@@ -429,7 +437,7 @@ function Header() {
           <span ref={timeRef} />
         </span>
         <div className="w-px h-3 bg-cyan-900/40" />
-        <span className="text-[10px] text-cyan-400/60 tracking-widest">v4.6.0</span>
+        <span className="text-[10px] text-cyan-400/60 tracking-widest">v4.7.0</span>
         <div className="w-px h-3 bg-cyan-900/40" />
         <SettingsPanel />
         <div className="w-px h-3 bg-cyan-900/40" />

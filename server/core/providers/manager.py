@@ -7,6 +7,9 @@ from core.providers.base import LLMProvider, ProviderError
 from core.providers.local_llama import LocalLlamaProvider
 from core.providers.anthropic_provider import AnthropicProvider
 from core.providers.openai_compat import OpenAICompatProvider
+from core.providers.router import (
+    HEDGE_DELAY_S, LEVELS, MAX_TOKENS, Telemetry, brain_key, hedged_stream, order_candidates,
+)
 from utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -18,7 +21,7 @@ logger = get_logger("providers")
 # OpenAI-compatible — l'app prend donc en charge n'importe quelle API.
 PRESETS: dict[str, dict] = {
     "anthropic":  {"kind": "anthropic", "label": "Anthropic (Claude)",
-                   "base_url": "https://api.anthropic.com", "model": "claude-sonnet-4-6", "needs_key": True},
+                   "base_url": "https://api.anthropic.com", "model": "claude-opus-5-5", "needs_key": True},
     "openai":     {"kind": "openai", "label": "OpenAI",
                    "base_url": "https://api.openai.com/v1", "model": "gpt-4o-mini", "needs_key": True},
     "gemini":     {"kind": "openai", "label": "Google Gemini",
@@ -56,6 +59,26 @@ _JUDGE_ORDER = [
 
 _CONFIG_FIELDS = {"api_key", "model", "base_url"}
 
+# Mode AUTO : pour chaque niveau de réflexion, les cerveaux essayés dans l'ordre
+# (« preset » ou « preset@modèle »). Seuls ceux dont la clé est configurée sont
+# utilisés ; le cerveau local sert toujours de dernier recours.
+AUTO = "auto"
+DEFAULT_CHAINS: dict[str, list[str]] = {
+    "instant": [
+        "cerebras", "groq", "gemini@gemini-2.5-flash-lite", "anthropic@claude-haiku-4-5",
+        "openai", "mistral", "deepseek", "openrouter", "ollama",
+    ],
+    "standard": [
+        "gemini@gemini-2.5-flash", "anthropic@claude-sonnet-5-5", "openai", "groq",
+        "cerebras", "deepseek", "mistral", "xai", "openrouter", "ollama",
+    ],
+    "deep": [
+        "anthropic", "gemini@gemini-2.5-pro", "openai", "deepseek", "xai",
+        "gemini@gemini-2.5-flash", "mistral", "openrouter", "ollama",
+    ],
+}
+_SPEC_RE = __import__("re").compile(r"^[a-z0-9_-]{1,40}(@[A-Za-z0-9._:/-]{1,120})?$")
+
 
 def _mask(key: str) -> str:
     return ("••••" + key[-4:]) if len(key) > 4 else ("••••" if key else "")
@@ -73,6 +96,9 @@ class ProviderManager:
         self._config_path = data_dir / "providers.json"
         self._active_name = "local"
         self._configs: dict[str, dict] = {}
+        self._chains: dict[str, list[str]] = {k: list(v) for k, v in DEFAULT_CHAINS.items()}
+        self._hedging = True
+        self.telemetry = Telemetry()
         self._load_config()
 
     # ── Persistance ─────────────────────────────────────────────────────────
@@ -89,24 +115,35 @@ class ProviderManager:
                         for name, cfg in configs.items()
                         if isinstance(cfg, dict) and name in PRESETS
                     }
+                routing = data.get("routing", {})
+                if isinstance(routing, dict):
+                    chains = routing.get("chains", {})
+                    if isinstance(chains, dict):
+                        for level in LEVELS:
+                            if isinstance(chains.get(level), list):
+                                self._chains[level] = [str(x) for x in chains[level] if _SPEC_RE.match(str(x))]
+                    self._hedging = bool(routing.get("hedging", True))
         except Exception as e:
             logger.warning(f"providers.json illisible ({e}) — retour au provider local")
             self._active_name, self._configs = "local", {}
-        if self._active_name != "local" and self._build(self._active_name) is None:
+        if self._active_name not in ("local", AUTO) and self._build(self._active_name) is None:
             logger.warning(f"Provider actif '{self._active_name}' non configuré — retour au local")
             self._active_name = "local"
 
     def _save_config(self) -> None:
         self._config_path.parent.mkdir(parents=True, exist_ok=True)
         self._config_path.write_text(
-            json.dumps({"active": self._active_name, "configs": self._configs},
-                       ensure_ascii=False, indent=2),
+            json.dumps({
+                "active": self._active_name,
+                "configs": self._configs,
+                "routing": {"chains": self._chains, "hedging": self._hedging},
+            }, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 
     # ── Construction ────────────────────────────────────────────────────────
 
-    def _build(self, name: str) -> LLMProvider | None:
+    def _build(self, name: str, model_override: str | None = None) -> LLMProvider | None:
         if name == "local":
             return self._local
         preset = PRESETS.get(name)
@@ -114,7 +151,7 @@ class ProviderManager:
             return None
         cfg = self._configs.get(name, {})
         api_key = str(cfg.get("api_key", ""))
-        model = str(cfg.get("model") or preset["model"])
+        model = str(model_override or cfg.get("model") or preset["model"])
         base_url = str(cfg.get("base_url") or preset["base_url"])
         if not base_url or not model or (preset["needs_key"] and not api_key):
             return None
@@ -126,8 +163,45 @@ class ProviderManager:
 
     # ── API publique ────────────────────────────────────────────────────────
 
+    def api_key(self, name: str) -> str:
+        """Clé API d'un provider (usage serveur uniquement, jamais renvoyée au client)."""
+        return str(self._configs.get(name, {}).get("api_key", ""))
+
+    def resolve(self, spec: str) -> LLMProvider | None:
+        """« gemini » ou « gemini@gemini-2.5-pro » → provider prêt, ou None si non configuré."""
+        name, _, model = spec.partition("@")
+        provider = self._build(name, model or None)
+        return provider if provider is not None and provider.is_available else None
+
+    def candidates(self, level: str) -> list[LLMProvider]:
+        """Cerveaux configurés pour un niveau (sans doublon), dans l'ordre de la chaîne."""
+        seen: set[str] = set()
+        out: list[LLMProvider] = []
+        for spec in self._chains.get(level, []):
+            provider = self.resolve(spec)
+            if provider is None or provider.name == "local":
+                continue
+            # Les API sans clé (Ollama, LM Studio…) ne comptent que si l'utilisateur les a réglées.
+            if not PRESETS[provider.name]["needs_key"] and provider.name not in self._configs:
+                continue
+            key = brain_key(provider)
+            if key not in seen:
+                seen.add(key)
+                out.append(provider)
+        return out
+
+    @property
+    def is_auto(self) -> bool:
+        return self._active_name == AUTO
+
     @property
     def active(self) -> LLMProvider:
+        if self.is_auto:
+            for level in ("standard", "deep", "instant"):
+                chain = self.candidates(level)
+                if chain:
+                    return chain[0]
+            return self._local
         provider = self._build(self._active_name)
         return provider if provider is not None else self._local
 
@@ -154,8 +228,31 @@ class ProviderManager:
         self._save_config()
         return ""
 
+    def set_routing(self, chains: dict | None = None, hedging: bool | None = None) -> str:
+        """Met à jour les chaînes du mode AUTO. Retourne un message d'erreur ou ''."""
+        if chains is not None:
+            for level, specs in chains.items():
+                if level not in LEVELS or not isinstance(specs, list):
+                    return f"Niveau inconnu : {level}"
+                bad = [x for x in specs if not isinstance(x, str) or not _SPEC_RE.match(x)
+                       or x.partition("@")[0] not in (*PRESETS, "local")]
+                if bad:
+                    return f"Cerveau invalide : {bad[0]}"
+                self._chains[level] = list(specs)[:12]
+        if hedging is not None:
+            self._hedging = bool(hedging)
+        self._save_config()
+        return ""
+
     def set_active(self, name: str) -> str:
         """Active un provider. Retourne un message d'erreur ou ''."""
+        if name == AUTO:
+            if not any(self.candidates(level) for level in LEVELS) and not self._local.is_available:
+                return "Mode AUTO : configurez au moins une clé API (Gemini, Groq, Anthropic…)."
+            self._active_name = AUTO
+            self._save_config()
+            logger.info("Cerveau actif : AUTO (routage multi-modèles)")
+            return ""
         if name != "local" and name not in PRESETS:
             return f"Provider inconnu: {name}"
         provider = self._build(name)
@@ -202,8 +299,16 @@ class ProviderManager:
             })
         active = self.active
         return {
+            "routing": {
+                "chains": self._chains,
+                "hedging": self._hedging,
+                "resolved": {
+                    level: [f"{p.label} · {p.model}" for p in self.candidates(level)] for level in LEVELS
+                },
+                "telemetry": self.telemetry.snapshot(),
+            },
             "active": self._active_name,
-            "active_label": active.label,
+            "active_label": "AUTO — routage multi-modèles" if self.is_auto else active.label,
             "active_model": active.model,
             "tier": active.tier,
             "local_available": self._local.is_available,
@@ -216,12 +321,54 @@ class ProviderManager:
         messages: list[dict[str, str]],
         max_tokens: int = 512,
         on_fallback: Callable[[str], Awaitable[None]] | None = None,
+        level: str | None = None,
+        on_route: Callable[[LLMProvider, float, str], Awaitable[None]] | None = None,
     ) -> AsyncGenerator[str, None]:
-        """Stream depuis le provider actif, fallback local si échec avant le 1er token."""
+        """Stream depuis le cerveau actif.
+
+        Mode AUTO : chaîne du niveau demandé, course au premier token (hedging),
+        repli sur le niveau voisin puis sur le cerveau local. Mode manuel :
+        provider actif, repli local si échec avant le 1er token.
+        """
+        if self.is_auto:
+            lvl = level if level in LEVELS else "standard"
+            chain = order_candidates(lvl, self.candidates(lvl), self.telemetry)
+            # Niveau vide ou en quarantaine : on emprunte les autres niveaux.
+            for other in LEVELS:
+                if other != lvl:
+                    for p in order_candidates(other, self.candidates(other), self.telemetry):
+                        if brain_key(p) not in {brain_key(c) for c in chain}:
+                            chain.append(p)
+            if self._local.is_available:
+                chain.append(self._local)
+
+            async def _winner(provider: LLMProvider, ttft: float) -> None:
+                if on_route is not None:
+                    await on_route(provider, ttft, lvl)
+
+            started = False
+            try:
+                async for token in hedged_stream(
+                    chain, system, messages,
+                    max_tokens=max(max_tokens, MAX_TOKENS[lvl]),
+                    telemetry=self.telemetry,
+                    hedge_delay=HEDGE_DELAY_S[lvl] if self._hedging else 3600.0,
+                    on_winner=_winner,
+                ):
+                    started = True
+                    yield token
+            except ProviderError as e:
+                logger.error(f"Routage AUTO en échec: {e}")
+                yield ("\n[Liaison interrompue en cours de réponse, Monsieur.]" if started
+                       else "Tous mes cerveaux sont injoignables, Monsieur. Vérifiez les clés API et la connexion.")
+            return
+
         provider = self.active
         started = False
         try:
             async for token in provider.stream(system, messages, max_tokens=max_tokens):
+                if not started and on_route is not None:
+                    await on_route(provider, 0.0, level or "standard")
                 started = True
                 yield token
             return

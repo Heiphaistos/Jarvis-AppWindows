@@ -39,7 +39,36 @@ export interface ProviderInfo {
   configured: boolean;
 }
 
+export type BrainLevel = "instant" | "standard" | "deep";
+
+export interface BrainTelemetry {
+  ttft_ms: number | null;
+  tokens_per_s: number | null;
+  ok: number;
+  failures: number;
+  cooling_down: boolean;
+  last_error: string;
+}
+
+export interface RoutingStatus {
+  chains: Record<BrainLevel, string[]>;
+  hedging: boolean;
+  resolved: Record<BrainLevel, string[]>;
+  telemetry: Record<string, BrainTelemetry>;
+}
+
+/** Cerveau qui a répondu au dernier message (mode AUTO). */
+export interface BrainRoute {
+  messageId: string;
+  level: BrainLevel;
+  provider: string;
+  label: string;
+  model: string;
+  ttftMs: number;
+}
+
 export interface ProvidersStatus {
+  routing?: RoutingStatus;
   active: string;
   active_label: string;
   active_model: string;
@@ -57,6 +86,7 @@ export type ServerEvent =
   | { type: "stt_text"; payload: { text: string } }
   | { type: "tool_result"; payload: { tool: string; result: string } }
   | { type: "agent_step"; payload: { phase: AgentPhase; detail: string; messageId: string } }
+  | { type: "brain"; payload: BrainRoute }
   | { type: "wake"; payload: Record<string, never> }
   | { type: "wake_unavailable"; payload: Record<string, never> }
   | { type: "notice"; payload: { message: string } }
