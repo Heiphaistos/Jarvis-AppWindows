@@ -529,7 +529,7 @@ dependencies = [
 
 [[package]]
 name = "client"
-version = "4.7.0"
+version = "5.0.0"
 dependencies = [
  "cpal",
  "serde",
