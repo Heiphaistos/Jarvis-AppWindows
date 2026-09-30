@@ -537,7 +537,8 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
         addMessage({
           id: crypto.randomUUID(),
           role: "user",
-          content: event.payload.text,
+          // Transcription peu sûre : signalée pour que Monsieur voie ce qui a été compris.
+          content: event.payload.uncertain ? `${event.payload.text} (?)` : event.payload.text,
           timestamp: Date.now(),
         });
         break;

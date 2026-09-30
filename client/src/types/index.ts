@@ -83,7 +83,7 @@ export type ServerEvent =
   | { type: "message_done"; payload: { messageId: string } }
   | { type: "tts_audio"; payload: { audio: string } }
   | { type: "tts_chunk"; payload: { audio: string; final: boolean; index: number } }
-  | { type: "stt_text"; payload: { text: string } }
+  | { type: "stt_text"; payload: { text: string; uncertain?: boolean } }
   | { type: "tool_result"; payload: { tool: string; result: string } }
   | { type: "agent_step"; payload: { phase: AgentPhase; detail: string; messageId: string } }
   | { type: "brain"; payload: BrainRoute }
