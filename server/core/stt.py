@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import re
 import numpy as np
 from typing import TYPE_CHECKING
 from utils.logger import get_logger
@@ -17,12 +18,53 @@ NO_SPEECH_THRESHOLD = 0.75
 # Durée minimale de parole détectée (en secondes) pour déclencher la transcription
 MIN_SPEECH_DURATION_S = 0.3
 
-HALLUCINATION_PHRASES = {
-    "amara.org", "sous-titres", "sous-titrage", "transcription",
-    "merci d'avoir regardé", "à bientôt", "sous-titré par",
-    "traduction", "traducteur", "www.", ".com", ".org",
-    "sous-titres réalisés", "patreon", "merci de votre attention",
-}
+# Phrases que Whisper invente sur du silence ou du bruit (génériques de vidéos
+# YouTube de son corpus d'entraînement). Comparées à la phrase ENTIÈRE, pas en
+# sous-chaîne : « ouvre google.com » ou « traduction de hello » sont de vraies
+# commandes et ne doivent plus disparaître.
+_HALLUCINATION_RE = re.compile(
+    r"^(?:"
+    r"sous[- ]titr\w*\b.*|"
+    r".*amara\.org.*|.*\bpatreon\b.*|"
+    r"merci d'avoir regardé.*|merci (?:de|pour) votre attention.*|"
+    r"(?:abonnez[- ]vous|like et abonne[- ]toi).*|"
+    r"à bientôt pour une nouvelle vidéo|"
+    r"transcription (?:par|réalisée) .*|traduction (?:par|réalisée) .*"
+    r")[.!… ]*$",
+    re.IGNORECASE,
+)
+# Signaux de confiance standard de Whisper (mêmes seuils que openai-whisper).
+LOGPROB_THRESHOLD = -1.0        # en dessous : Whisper devine
+COMPRESSION_RATIO_MAX = 2.4     # au-dessus : texte en boucle (« oui oui oui oui… »)
+UNCERTAIN_LOGPROB = -0.6        # entre les deux : transcription gardée mais « incertaine »
+
+_INITIAL_PROMPT = (
+    "Commandes vocales en français adressées à JARVIS, assistant personnel de Monsieur : "
+    "questions, météo, heure, calculs, rappels, fenêtres, NiTriTe, Discord, Spotify, Chrome."
+)
+
+# « Jarvis » mal entendu par Whisper → nom rétabli (aide aussi le routage).
+_NAME_FIX = re.compile(r"\b(?:jar\s?vice|jarvice|jervis|jarvi|charvis|jarvisse|djarvis|jarvys|j\.a\.r\.v\.i\.s\.?)\b", re.IGNORECASE)
+
+
+def clean_transcript(text: str) -> str:
+    """Normalise une transcription : nom de JARVIS, espaces."""
+    text = _NAME_FIX.sub("Jarvis", text or "")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def is_hallucination(text: str) -> bool:
+    t = (text or "").strip()
+    if len(t) < 2 or not re.search(r"[a-zA-ZÀ-ÿ0-9]", t):
+        return True
+    if _HALLUCINATION_RE.match(t):
+        return True
+    # Écho de la consigne initiale (fréquent sur du silence).
+    if t.lower().startswith("commandes vocales en français"):
+        return True
+    # Même mot répété en boucle.
+    words = re.findall(r"\w+", t.lower())
+    return len(words) >= 6 and len(set(words)) <= 2
 
 
 class STTManager:
@@ -62,45 +104,33 @@ class STTManager:
 
     @staticmethod
     def _is_hallucination(text: str) -> bool:
-        t = text.lower().strip()
-        if len(t) < 3:
-            return True
-        return any(phrase in t for phrase in HALLUCINATION_PHRASES)
+        return is_hallucination(text)
 
-    async def transcribe_chunks(
-        self, chunks: list[list[float]], sample_rate: int
-    ) -> str:
+    @staticmethod
+    def prepare(chunks: list[list[float]], sample_rate: int) -> "np.ndarray | None":
+        """Audio 16 kHz mono normalisé, ou None si ce n'est que du silence."""
+        audio = np.concatenate([np.array(c, dtype=np.float32) for c in chunks])
+        target_rate = 16000
+        if sample_rate != target_rate:
+            from math import gcd
+            from scipy.signal import resample_poly  # type: ignore[import]
+            g = gcd(target_rate, sample_rate)
+            audio = resample_poly(audio, target_rate // g, sample_rate // g).astype(np.float32)
+        rms = float(np.sqrt(np.mean(audio ** 2))) if audio.size else 0.0
+        if rms < RMS_THRESHOLD:
+            logger.debug(f"Audio ignoré (silence) — RMS={rms:.4f}")
+            return None
+        # Normaliser l'amplitude — micro Windows trop bas = Whisper qui hallucine.
+        gain = min(0.1 / rms, 31.6)  # cible RMS 0,1, gain plafonné à ~30 dB
+        return (audio * gain).clip(-1.0, 1.0)
+
+    async def transcribe_audio(self, audio: "np.ndarray") -> tuple[str, bool]:
+        """Whisper local → (texte, incertain)."""
         if self._model is None:
-            return ""
+            return "", False
 
-        def _run() -> str:
-            audio = np.concatenate(
-                [np.array(c, dtype=np.float32) for c in chunks]
-            )
-
-            # Resampler à 16kHz si le sample rate natif est différent
-            target_rate = 16000
-            if sample_rate != target_rate:
-                from math import gcd
-                from scipy.signal import resample_poly  # type: ignore[import]
-                g = gcd(target_rate, sample_rate)
-                audio = resample_poly(audio, target_rate // g, sample_rate // g).astype(np.float32)
-                logger.debug(f"Resampled {sample_rate}->{target_rate} Hz ({len(audio)} samples)")
-
-            rms = float(np.sqrt(np.mean(audio ** 2)))
-            logger.debug(f"Audio RMS={rms:.4f} (seuil={RMS_THRESHOLD})")
-            if rms < RMS_THRESHOLD:
-                logger.debug(f"Audio ignoré (silence) — RMS={rms:.4f}")
-                return ""
-
-            # Normaliser l'amplitude — si micro Windows trop bas, Whisper hallucine
-            # Target RMS 0.1 (parole correcte), gain plafonné à +30 dB
-            target_rms = 0.1
-            gain = min(target_rms / rms, 31.6)  # max ~30 dB
-            audio = (audio * gain).clip(-1.0, 1.0)
-            logger.debug(f"Gain appliqué: x{gain:.2f} (RMS {rms:.4f}->{target_rms:.4f})")
-
-            segments, info = self._model.transcribe(  # type: ignore[union-attr]
+        def _run() -> tuple[str, bool]:
+            segments, _info = self._model.transcribe(  # type: ignore[union-attr]
                 audio,
                 language="fr",
                 beam_size=5,
@@ -114,15 +144,10 @@ class STTManager:
                 no_speech_threshold=NO_SPEECH_THRESHOLD,
                 condition_on_previous_text=False,  # évite les hallucinations chaînées
                 temperature=0.0,                   # décodage greedy pur — plus stable
-                # Biais de vocabulaire : oriente Whisper vers le registre réel
-                # des requêtes (questions à un assistant, français courant)
-                initial_prompt=(
-                    "Commandes vocales en français adressées à JARVIS, assistant "
-                    "personnel : questions, météo, heure, calculs, système."
-                ),
+                initial_prompt=_INITIAL_PROMPT,
             )
-
-            result_parts: list[str] = []
+            parts: list[str] = []
+            uncertain = False
             for seg in segments:
                 txt = seg.text.strip()
                 if not txt:
@@ -130,12 +155,24 @@ class STTManager:
                 if seg.no_speech_prob > NO_SPEECH_THRESHOLD:
                     logger.debug(f"Segment rejeté (no_speech={seg.no_speech_prob:.2f}): {txt!r}")
                     continue
-                if STTManager._is_hallucination(txt):
+                if seg.avg_logprob < LOGPROB_THRESHOLD or seg.compression_ratio > COMPRESSION_RATIO_MAX:
+                    logger.debug(f"Segment rejeté (logprob={seg.avg_logprob:.2f}, "
+                                 f"compression={seg.compression_ratio:.2f}): {txt!r}")
+                    continue
+                if is_hallucination(txt):
                     logger.debug(f"Hallucination rejetée: {txt!r}")
                     continue
-                result_parts.append(txt)
-
-            return " ".join(result_parts)
+                uncertain = uncertain or seg.avg_logprob < UNCERTAIN_LOGPROB
+                parts.append(txt)
+            return clean_transcript(" ".join(parts)), uncertain
 
         async with self._lock:
             return await asyncio.to_thread(_run)
+
+    async def transcribe_chunks(self, chunks: list[list[float]], sample_rate: int) -> str:
+        """Compatibilité : chunks bruts → texte (Whisper local)."""
+        audio = await asyncio.to_thread(self.prepare, chunks, sample_rate)
+        if audio is None:
+            return ""
+        text, _ = await self.transcribe_audio(audio)
+        return text

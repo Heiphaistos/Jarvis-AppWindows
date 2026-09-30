@@ -62,6 +62,7 @@ tts = TTSManager(settings)
 tools = ToolRegistry()
 
 # Init persistent memory early so tools can access the singleton
+from api.websocket import voice_available as _voice_available
 from core.persistent_memory import get_memory as _init_memory
 _init_memory()
 
@@ -106,7 +107,7 @@ async def _load_models_background() -> None:
     from core.monitor import broadcast_direct as _broadcast_direct
     _broadcast_direct("server_status", {
         "llm": providers.is_available,
-        "stt": stt.is_available,
+        "stt": _voice_available(stt, providers),
         "tts": tts.is_available,
         "provider": providers.active.name,
         "providerLabel": providers.active.label,
@@ -169,7 +170,7 @@ async def apply_performance_profile() -> None:
         from core.monitor import broadcast_direct as _bd
         _bd("server_status", {
             "llm": providers.is_available,
-            "stt": stt.is_available,
+            "stt": _voice_available(stt, providers),
             "tts": tts.is_available,
             "provider": providers.active.name,
             "providerLabel": providers.active.label,

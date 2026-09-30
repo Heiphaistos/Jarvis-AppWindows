@@ -509,6 +509,25 @@ def _archive_conversation(providers: ProviderManager, memory: ContextMemory) -> 
     task.add_done_callback(_learning_tasks.discard)
 
 
+def _voice_block(uncertain: bool) -> str:
+    """Consignes du mode vocal : la réponse sera ENTENDUE, pas lue."""
+    block = (
+        "\n\n## MODE VOCAL\n\n"
+        "Monsieur vous parle au micro et entendra votre réponse. Répondez en une à trois "
+        "phrases naturelles, sans liste, titre, lien ni symbole. Le texte vient d'une "
+        "transcription automatique : s'il semble incohérent ou incomplet, demandez de répéter "
+        "plutôt que d'inventer une intention."
+    )
+    if uncertain:
+        block += (
+            " ATTENTION : cette transcription est INCERTAINE. Avant toute action qui modifie "
+            "quelque chose (taper du texte, fermer une fenêtre, envoyer un mail, remplir un "
+            "formulaire, créer un rappel), reformulez ce que vous avez compris et demandez "
+            "confirmation."
+        )
+    return block
+
+
 # Cache par connexion du system prompt local (stable → cache KV llama-cpp
 # préservé). Clé : id(memory) — une ContextMemory par connexion.
 _system_cache: dict[int, str] = {}
@@ -522,6 +541,8 @@ async def handle_text_query(
     tts: TTSManager,
     tools: ToolRegistry,
     tts_enabled: bool = True,
+    voice: bool = False,
+    uncertain: bool = False,
 ) -> None:
     await manager.send(ws, "status", {"status": "processing"})
     previous = _previous_assistant(memory)
@@ -538,6 +559,8 @@ async def handle_text_query(
         system = build_system_prompt(providers.tier, text)
     from core.conversation_memory import conversation_block
     system += conversation_block(memory)
+    if voice:
+        system += _voice_block(uncertain)
 
     # Routeur d'intention : les demandes évidentes exécutent l'outil
     # immédiatement, sans dépendre du LLM pour le déclencher.
@@ -642,6 +665,26 @@ async def handle_council_query(
     await manager.send(ws, "status", {"status": "idle"})
 
 
+async def transcribe(
+    audio_buffer: list[list[float]], sample_rate: int, stt: STTManager, providers: ProviderManager,
+) -> tuple[str, bool]:
+    """Voix → (texte, incertain). Cloud (Groq/OpenAI Whisper large) si une clé
+    est configurée, sinon ou en cas d'échec Whisper local."""
+    audio = await asyncio.to_thread(STTManager.prepare, audio_buffer, sample_rate)
+    if audio is None:
+        return "", False
+    from core import cloud_stt
+    text = await cloud_stt.transcribe(audio, providers)
+    if text is not None:
+        return text, False
+    return await stt.transcribe_audio(audio)
+
+
+def voice_available(stt: STTManager, providers: ProviderManager) -> bool:
+    from core import cloud_stt
+    return stt.is_available or bool(cloud_stt.engines(providers))
+
+
 async def transcribe_and_query(
     ws: WebSocket,
     audio_buffer: list[list[float]],
@@ -655,11 +698,16 @@ async def transcribe_and_query(
 ) -> None:
     if not audio_buffer:
         return
-    text = await stt.transcribe_chunks(audio_buffer, sample_rate)
-    logger.info(f"STT transcription: '{text}'")
+    text, uncertain = await transcribe(audio_buffer, sample_rate, stt, providers)
+    logger.info(f"STT transcription: {text!r}{' (incertaine)' if uncertain else ''}")
     if text.strip():
-        await manager.send(ws, "stt_text", {"text": text.strip()})
-        await handle_text_query(ws, text.strip(), providers, memory, tts, tools, tts_enabled)
+        await manager.send(ws, "stt_text", {"text": text.strip(), "uncertain": uncertain})
+        await handle_text_query(
+            ws, text.strip(), providers, memory, tts, tools, tts_enabled,
+            voice=True, uncertain=uncertain,
+        )
+    else:
+        await manager.send(ws, "status", {"status": "idle"})
 
 
 async def websocket_handler(
@@ -704,7 +752,7 @@ async def websocket_handler(
     # Notify client of server capabilities immediately on connect
     await manager.send(ws, "server_status", {
         "llm": providers.is_available,
-        "stt": stt.is_available,
+        "stt": voice_available(stt, providers),
         "tts": tts.is_available,
         "provider": providers.active.name,
         "providerLabel": providers.active.label,
@@ -852,7 +900,7 @@ async def websocket_handler(
             elif event_type == "audio_chunk":
                 if not _rate_limiter.allow_audio(ws_id):
                     continue
-                if stt.is_available:
+                if voice_available(stt, providers):
                     chunk_data = payload.get("data")
                     if not isinstance(chunk_data, list):
                         continue
@@ -930,7 +978,7 @@ async def websocket_handler(
                 speech_detected = False
                 speech_run = 0
                 silence_run = 0
-                if audio_buffer and stt.is_available:
+                if audio_buffer and voice_available(stt, providers):
                     chunks = list(audio_buffer)
                     audio_buffer.clear()
                     if query_task is not None and not query_task.done():
