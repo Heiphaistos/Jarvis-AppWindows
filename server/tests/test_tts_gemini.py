@@ -55,3 +55,13 @@ async def test_gemini_sans_cle_bascule(monkeypatch):
     # Choisir une voix Edge désactive Gemini
     t.set_edge_voice("fr-FR-RemyMultilingualNeural")
     assert t._gemini_voice is None
+
+
+def test_texte_prononcable():
+    from core.tts import speakable
+    assert speakable("**ITER** vise la fusion [1], voir [le site](https://iter.org) [2, 3].") == \
+        "ITER vise la fusion, voir le site."
+    assert speakable("## Résumé\n- premier point\n- second point") == "Résumé premier point second point"
+    assert speakable("|---|:---:|") == ""
+    assert speakable("Voici :\n```python\nprint(1)\n```") == "Voici : le code est affiché à l'écran."
+    assert speakable("Source : https://exemple.fr/page") == "Source :"
