@@ -14,9 +14,8 @@ _TIMEOUT = httpx.Timeout(connect=10.0, read=120.0, write=30.0, pool=10.0)
 
 
 async def parse_openai_sse(lines: AsyncIterator[str]) -> AsyncGenerator[str, None]:
-    """Flux SSE /chat/completions → texte, puis balise <JARVIS_TOOL> si le modèle
-    appelle un outil (seul le 1er appel est gardé : la boucle agent en traite un
-    par itération)."""
+    """Flux SSE /chat/completions → texte, puis une balise <JARVIS_TOOL> par appel
+    d'outil (appels parallèles exécutés ensemble par la boucle agent)."""
     calls: dict[int, dict[str, str]] = {}
     async for line in lines:
         if not line.startswith("data:"):
@@ -42,10 +41,11 @@ async def parse_openai_sse(lines: AsyncIterator[str]) -> AsyncGenerator[str, Non
                 slot["name"] = fn["name"]
             if fn.get("arguments"):
                 slot["args"] += fn["arguments"]
-    if calls:
-        first = calls[min(calls)]
-        if first["name"]:
-            yield tool_tag(first["name"], parse_tool_args(first["args"]))
+    # Appels parallèles : une balise par appel, dans l'ordre des index.
+    for index in sorted(calls):
+        call = calls[index]
+        if call["name"]:
+            yield tool_tag(call["name"], parse_tool_args(call["args"]))
 
 
 class OpenAICompatProvider(LLMProvider):

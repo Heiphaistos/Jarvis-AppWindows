@@ -15,10 +15,9 @@ _API_VERSION = "2023-06-01"
 
 
 async def parse_anthropic_sse(lines: AsyncIterator[str], label: str = "Anthropic") -> AsyncGenerator[str, None]:
-    """Flux SSE Messages → texte ; un bloc tool_use devient une balise <JARVIS_TOOL>
-    (premier appel seulement, la boucle agent en traite un par itération)."""
+    """Flux SSE Messages → texte ; chaque bloc tool_use devient une balise
+    <JARVIS_TOOL> (appels parallèles exécutés ensemble par la boucle agent)."""
     tool: dict | None = None
-    emitted_tool = False
     async for line in lines:
         if not line.startswith("data:"):
             continue
@@ -29,7 +28,7 @@ async def parse_anthropic_sse(lines: AsyncIterator[str], label: str = "Anthropic
         etype = event.get("type")
         if etype == "content_block_start":
             block = event.get("content_block") or {}
-            if block.get("type") == "tool_use" and not emitted_tool:
+            if block.get("type") == "tool_use":
                 tool = {"name": block.get("name", ""), "json": ""}
         elif etype == "content_block_delta":
             delta = event.get("delta") or {}
@@ -41,7 +40,7 @@ async def parse_anthropic_sse(lines: AsyncIterator[str], label: str = "Anthropic
                     yield text
         elif etype == "content_block_stop" and tool is not None:
             yield tool_tag(tool["name"], parse_tool_args(tool["json"]))
-            tool, emitted_tool = None, True
+            tool = None
         elif etype == "error":
             detail = (event.get("error") or {}).get("message", "erreur inconnue")
             raise ProviderError(f"{label}: {detail}")

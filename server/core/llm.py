@@ -39,7 +39,9 @@ Ton : calme, direct, légèrement ironique. Comme l'IA d'Iron Man — au service
 
 Utilise-les proactivement quand la question l'exige. Syntaxe :
 <JARVIS_TOOL>{"name": "...", "args": {...}}</JARVIS_TOOL>
-Un outil par balise. Pour une demande en plusieurs étapes (« regarde la météo et mets un
+Un outil par balise. Plusieurs informations indépendantes (météo de trois villes, heure et
+batterie) : émets toutes les balises d'un coup, elles sont exécutées en parallèle (4 max).
+Pour une demande en plusieurs étapes (« regarde la météo et mets un
 rappel s'il pleut »), appelle le premier outil, lis son résultat, puis appelle le suivant :
 tu peux enchaîner jusqu'à 4 outils avant de répondre.
 
@@ -134,6 +136,25 @@ Commence directement ta réponse. Pas de préambule, pas de "Bien sûr !" inutil
 """
 
 _TOOL_CALL_RE = re.compile(r"<JARVIS_TOOL>(.*?)</JARVIS_TOOL>", re.DOTALL)
+
+
+MAX_PARALLEL_TOOLS = 4
+
+
+def parse_tool_calls(response: str) -> list[tuple[str, dict]]:
+    """Tous les appels d'outil de la réponse (au plus MAX_PARALLEL_TOOLS), dans l'ordre."""
+    calls: list[tuple[str, dict]] = []
+    for m in _TOOL_CALL_RE.finditer(response):
+        try:
+            payload = json.loads(m.group(1).strip())
+            name = str(payload.get("name", ""))
+            args = dict(payload.get("args", {}))
+        except (json.JSONDecodeError, AttributeError, TypeError, ValueError):
+            logger.warning(f"Tool call JSON invalide: {m.group(1)!r}")
+            continue
+        if name:
+            calls.append((name, args))
+    return calls[:MAX_PARALLEL_TOOLS]
 
 
 def parse_tool_call(response: str) -> tuple[str, dict] | None:

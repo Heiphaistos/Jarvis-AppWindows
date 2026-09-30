@@ -6,7 +6,7 @@ import uuid
 from fastapi import WebSocket, WebSocketDisconnect
 from utils.logger import get_logger
 from utils.config import MODELS_DIR
-from core.llm import parse_tool_call, _TOOL_CALL_RE
+from core.llm import parse_tool_calls, _TOOL_CALL_RE
 from core.memory import ContextMemory
 from core.prompt import build_system_prompt
 from core.providers import ProviderManager
@@ -77,6 +77,17 @@ def _tool_followup(name: str, args: dict | None, result: str, chain: bool = Fals
         "Réponds directement à Monsieur en français, en une ou deux phrases, à partir de ce "
         "résultat. N'émets PAS de balise JARVIS_TOOL — le résultat est déjà là."
     )
+
+
+def _tools_followup(calls: list[tuple[str, dict]], results: list[str], chain: bool = False) -> str:
+    """Résultats de plusieurs outils exécutés en parallèle, en un seul message."""
+    blocks = "\n\n".join(
+        f"[RÉSULTAT OUTIL {name}({args})]\n{result}" for (name, args), result in zip(calls, results)
+    )
+    # Consigne du plus exigeant : un dossier à synthétiser l'emporte sur une reformulation.
+    rich = next((n for n, _ in calls if n in RICH_TOOLS), None)
+    instruction = _tool_followup(rich or calls[0][0], None, "", chain=chain).split("\n\n", 1)[1]
+    return f"{blocks}\n\n{instruction.replace('ce résultat', 'ces résultats')}"
 
 
 def _call_key(name: str, args: dict) -> str:
@@ -195,8 +206,10 @@ async def _agent_loop(
         ):
             full_response += token
             if in_tool_tag:
-                if "</JARVIS_TOOL>" in full_response:
-                    break  # Balise complète → exécuter l'outil
+                # Cloud : on laisse finir le flux, d'autres appels (parallèles)
+                # peuvent suivre. Local : le 7B divague après la balise → stop.
+                if providers.tier == "local" and "</JARVIS_TOOL>" in full_response:
+                    break
                 continue
 
             pending += token
@@ -206,7 +219,7 @@ async def _agent_loop(
                 await _emit(pending[:idx])
                 pending = ""
                 in_tool_tag = True
-                if "</JARVIS_TOOL>" in full_response:
+                if providers.tier == "local" and "</JARVIS_TOOL>" in full_response:
                     break
                 continue
 
@@ -227,48 +240,54 @@ async def _agent_loop(
             await _emit(pending)
             pending = ""
 
-        # Vérifier si tool call présent dans la réponse complète
-        tool_result = parse_tool_call(full_response)
-        if tool_result:
-            name, args = tool_result
-            logger.info(f"Agent loop iteration {_iteration + 1}: tool call {name}({args})")
-            # Notifier le client (outil en cours)
-            await manager.send(ws, "agent_step", {
-                "phase": "tool", "detail": name, "messageId": message_id,
-            })
-            await manager.send(ws, "tool_result", {"tool": name, "result": f"⚙️ Exécution de {name}..."})
-            key = _call_key(name, args)
-            repeated = key in executed
-            if repeated:
-                # Le cerveau redemande le même appel : on ne ré-exécute pas (un
-                # rappel créé deux fois, un mail envoyé deux fois…), on force la réponse.
-                logger.info(f"Appel répété ignoré : {name}({args})")
-                result = executed[key]
-            else:
-                # Exécuter l'outil dans un thread (opération bloquante possible)
+        # Appels d'outils présents dans la réponse (plusieurs = exécutés en parallèle)
+        calls = parse_tool_calls(full_response)
+        if calls:
+            logger.info(f"Agent loop iteration {_iteration + 1}: {len(calls)} appel(s) {[c[0] for c in calls]}")
+
+            async def _run_call(name: str, args: dict) -> tuple[str, bool]:
+                """Exécute un appel (ou reprend son résultat s'il a déjà été fait)."""
+                key = _call_key(name, args)
+                if key in executed:
+                    # Le cerveau redemande le même appel : on ne ré-exécute pas (un
+                    # rappel créé deux fois, un mail envoyé deux fois…), on force la réponse.
+                    logger.info(f"Appel répété ignoré : {name}({args})")
+                    return executed[key], True
+                # Réservé AVANT tout await : un doublon dans le même lot n'est pas relancé.
+                executed[key] = "(en cours)"
+                await manager.send(ws, "agent_step", {
+                    "phase": "tool", "detail": name, "messageId": message_id,
+                })
+                await manager.send(ws, "tool_result", {"tool": name, "result": f"⚙️ Exécution de {name}..."})
                 try:
-                    result = await asyncio.to_thread(tools.execute, name, **args)
+                    # Thread : les outils sont bloquants (réseau, WMI, PowerShell…)
+                    result = str(await asyncio.to_thread(tools.execute, name, **args))
                 except Exception as e:
                     result = f"Erreur outil {name}: {e}"
                     logger.error(f"Tool execution error: {e}", exc_info=True)
-                executed[key] = str(result)
+                executed[key] = result
+                await manager.send(ws, "tool_result", {"tool": name, "result": result[:300]})
+                return result, False
 
-            # Envoyer le résultat au client
-            await manager.send(ws, "tool_result", {"tool": name, "result": str(result)[:300]})
+            outcomes = await asyncio.gather(*(_run_call(n, a) for n, a in calls))
+            # Un doublon dans le même lot : son résultat est celui de l'original.
+            results = [executed[_call_key(n, a)] if r == "(en cours)" else r for (n, a), (r, _) in zip(calls, outcomes)]
+            repeated = all(rep for _, rep in outcomes)
             used_tools = True
-            rich = rich or name in RICH_TOOLS
+            rich = rich or any(n in RICH_TOOLS for n, _ in calls)
 
             # Leçon apprise : un échec d'outil est mémorisé pour ne pas être répété
-            if not lesson_recorded and str(result).lower().startswith("erreur"):
-                lesson_recorded = True
-                try:
-                    from core.persistent_memory import get_memory
-                    get_memory().record_lesson(
-                        context=user_query,
-                        lesson=f"L'outil {name}({args}) a échoué : {str(result)[:120]}",
-                    )
-                except Exception:
-                    logger.warning("Impossible d'enregistrer la leçon", exc_info=True)
+            for (name, args), result in zip(calls, results):
+                if not lesson_recorded and result.lower().startswith("erreur"):
+                    lesson_recorded = True
+                    try:
+                        from core.persistent_memory import get_memory
+                        get_memory().record_lesson(
+                            context=user_query,
+                            lesson=f"L'outil {name}({args}) a échoué : {result[:120]}",
+                        )
+                    except Exception:
+                        logger.warning("Impossible d'enregistrer la leçon", exc_info=True)
 
             # Extraire le texte visible avant la balise tool (s'il y en a)
             visible = _TOOL_CALL_RE.sub("", full_response).strip()
@@ -276,15 +295,16 @@ async def _agent_loop(
                 await manager.send(ws, "token", {"token": visible, "messageId": message_id})
                 accumulated += visible
 
+            # Enchaînement possible sauf en local, sur un appel répété ou au dernier tour.
+            chain = providers.tier == "cloud" and not repeated and _iteration < MAX_AGENT_ITERATIONS - 2
+            if len(calls) == 1:
+                followup = _tool_followup(calls[0][0], None, results[0], chain=chain)
+            else:
+                followup = _tools_followup(calls, results, chain=chain)
             # Réinjecter dans le contexte pour la prochaine itération LLM
             messages = messages + [
                 {"role": "assistant", "content": full_response},
-                {"role": "user", "content": _tool_followup(
-                    name, None, str(result),
-                    # Enchaînement possible sauf en local, sur un appel répété ou au dernier tour.
-                    chain=providers.tier == "cloud" and not repeated
-                    and _iteration < MAX_AGENT_ITERATIONS - 2,
-                )},
+                {"role": "user", "content": followup},
             ]
             continue  # Prochaine itération
 
