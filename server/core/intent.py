@@ -47,6 +47,12 @@ _CONVERSATIONS_RE = re.compile(
     r"(?:notre|la)\s+(?:dernière|précédente|derniere|precedente)\s+(?:conversation|discussion)",
     re.IGNORECASE,
 )
+_RESEARCH_RE = re.compile(
+    r"^(?:jarvis[, ]+)?(?:fais(?:[- ]moi)?\s+une\s+recherche(?:\s+approfondie)?|recherche\s+approfondie|"
+    r"renseigne[- ]toi|documente[- ]toi|creuse(?:\s+le\s+sujet)?|enquête)"
+    r"\s+(?:sur|à\s+propos\s+d[e']|au\s+sujet\s+d[e']|concernant)?\s*(.{3,})$",
+    re.IGNORECASE,
+)
 _IP_RE = re.compile(r"\bip\s+publique\b|\bmon\s+ip\b", re.IGNORECASE)
 
 
@@ -72,6 +78,11 @@ def _extract_calc(text: str) -> str | None:
 def fast_route(text: str) -> tuple[str, dict] | None:
     """Retourne (tool_name, args) si l'intention est évidente, sinon None."""
     text = text.strip()
+
+    # Recherche explicite : passe avant la borne de longueur (la question peut être longue).
+    m = _RESEARCH_RE.search(text)
+    if m and len(text) <= 400:
+        return "deep_research", {"question": m.group(1).strip(" ?.!")}
     if len(text) > 120:
         return None  # phrase longue → contexte riche, laisser l'agent décider
 

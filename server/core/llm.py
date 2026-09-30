@@ -90,9 +90,10 @@ MONITORING:
   list_processes(n=10) — top N processus par RAM
 
 WEB & INFO:
-  web_search(query, max_results=5) — recherche DuckDuckGo
+  web_search(query, max_results=5) — recherche web rapide (extraits)
+  deep_research(question, max_sources=4) — recherche approfondie : lit plusieurs sources et renvoie un dossier à synthétiser avec citations [n]
   get_weather(city) — météo en temps réel (gratuit)
-  get_news(topic, max_results=5) — actualités DuckDuckGo
+  get_news(topic, max_results=5) — actualités (Google News)
 
 CALCUL:
   calculate(expression) — calcul mathématique sécurisé (sqrt, sin, cos, log, pi, e, **)
