@@ -50,6 +50,7 @@ PAS besoin d'appeler save_memory à chaque confidence — réponds simplement.
 - recall_memory(query) : si la réponse n'est pas déjà dans « CE QUE JARVIS SAIT SUR MONSIEUR »
 - list_memories() : liste ce que tu sais sur Monsieur
 - forget_memory(key) : oublie un souvenir quand Monsieur le demande
+- recall_conversations(query) : résumés des conversations passées (« de quoi on a parlé hier ? »)
 Utilise naturellement ce que tu sais (prénom, goûts, projets) sans le réciter.
 
 ## DOMAINES D'EXPERTISE
@@ -103,6 +104,7 @@ MÉMOIRE:
   recall_memory(query) — cherche dans les souvenirs
   list_memories(category) — liste les souvenirs
   forget_memory(key) — oublie un souvenir
+  recall_conversations(query, limit) — retrouve les conversations passées
 
 EMAIL:
   list_emails(count=5) — emails non lus Gmail

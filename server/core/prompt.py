@@ -38,9 +38,14 @@ def build_system_prompt(tier: str, user_text: str, stable: bool = False) -> str:
         ctx = memory.get_context_summary("" if stable else user_text)
         if ctx:
             parts.append(ctx)
-        lessons = memory.get_lessons_summary()
+        lessons = memory.get_lessons_summary(query="" if stable else user_text)
         if lessons:
             parts.append(lessons)
+        if not stable:
+            # Prompt local stable : court et figé (cache KV) — pas d'épisodes.
+            episodes = memory.get_episodes_summary(user_text)
+            if episodes:
+                parts.append(episodes)
     except Exception as e:
         logger.warning(f"Mémoire indisponible pour le prompt: {e}")
 

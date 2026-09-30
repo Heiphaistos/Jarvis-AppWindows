@@ -59,7 +59,10 @@ async def memories_list() -> dict:
     from core.auto_memory import is_enabled
     from core.persistent_memory import get_memory
     memory = get_memory()
-    return {"facts": memory.facts(), "lessons": memory.lessons(), "auto": is_enabled()}
+    return {
+        "facts": memory.facts(), "lessons": memory.lessons(),
+        "episodes": memory.episodes(limit=20), "auto": is_enabled(),
+    }
 
 
 @router.delete("/memories/{key}")
@@ -75,6 +78,14 @@ async def lessons_forget(lesson_id: int) -> dict:
     from core.persistent_memory import get_memory
     if not get_memory().forget_lesson(lesson_id):
         raise HTTPException(status_code=404, detail="Leçon introuvable")
+    return {"ok": True}
+
+
+@router.delete("/episodes/{episode_id}")
+async def episodes_forget(episode_id: int) -> dict:
+    from core.persistent_memory import get_memory
+    if not get_memory().forget_episode(episode_id):
+        raise HTTPException(status_code=404, detail="Conversation introuvable")
     return {"ok": True}
 
 

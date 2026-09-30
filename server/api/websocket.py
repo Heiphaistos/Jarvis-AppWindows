@@ -416,6 +416,31 @@ def _learn_in_background(
     task.add_done_callback(_learning_tasks.discard)
 
 
+def _maintain_conversation(providers: ProviderManager, memory: ContextMemory) -> None:
+    """Après chaque réponse : condense ce qui sort de la fenêtre de contexte et
+    met à jour l'archive de la session tous les EPISODE_EVERY_TURNS messages."""
+    from core.conversation_memory import EPISODE_EVERY_TURNS, save_episode, update_rolling_summary
+
+    async def _run() -> None:
+        if memory.evicted:
+            await update_rolling_summary(providers, memory)
+        if memory.user_turns and memory.user_turns % EPISODE_EVERY_TURNS == 0:
+            memory.episode_id = await save_episode(providers, memory.snapshot(), memory.episode_id)
+
+    task = asyncio.create_task(_run())
+    _learning_tasks.add(task)
+    task.add_done_callback(_learning_tasks.discard)
+
+
+def _archive_conversation(providers: ProviderManager, memory: ContextMemory) -> None:
+    """Archive la session (fin de connexion, historique effacé) en arrière-plan."""
+    from core.conversation_memory import save_episode
+    snapshot = memory.snapshot()
+    task = asyncio.create_task(save_episode(providers, snapshot, snapshot.episode_id))
+    _learning_tasks.add(task)
+    task.add_done_callback(_learning_tasks.discard)
+
+
 # Cache par connexion du system prompt local (stable → cache KV llama-cpp
 # préservé). Clé : id(memory) — une ContextMemory par connexion.
 _system_cache: dict[int, str] = {}
@@ -443,6 +468,8 @@ async def handle_text_query(
         system = _system_cache[key]
     else:
         system = build_system_prompt(providers.tier, text)
+    from core.conversation_memory import conversation_block
+    system += conversation_block(memory)
 
     # Routeur d'intention : les demandes évidentes exécutent l'outil
     # immédiatement, sans dépendre du LLM pour le déclencher.
@@ -492,6 +519,7 @@ async def handle_text_query(
     if final_text:
         memory.add_assistant(final_text)
     _learn_in_background(ws, providers, text, final_text, previous)
+    _maintain_conversation(providers, memory)
 
     await manager.send(ws, "agent_step", {"phase": "done", "detail": "", "messageId": message_id})
     await manager.send(ws, "message_done", {"messageId": message_id})
@@ -529,6 +557,7 @@ async def handle_council_query(
     await manager.send(ws, "token", {"token": best, "messageId": message_id})
     memory.add_assistant(best)
     _learn_in_background(ws, providers, text, best, previous)
+    _maintain_conversation(providers, memory)
 
     if tts_enabled and tts.is_available and best:
         tts_queue: asyncio.Queue[str | None] = asyncio.Queue()
@@ -876,6 +905,7 @@ async def websocket_handler(
                         logger.warning(f"Voix introuvable: {voice_path}")
 
             elif event_type == "clear_history":
+                _archive_conversation(providers, memory)
                 memory.clear()
                 logger.info("Historique effacé")
 
@@ -900,4 +930,5 @@ async def websocket_handler(
         _monitor_unsubscribe(alert_queue)
         _rate_limiter.cleanup(ws_id)
         _system_cache.pop(id(memory), None)
+        _archive_conversation(providers, memory)
         manager.disconnect(ws)

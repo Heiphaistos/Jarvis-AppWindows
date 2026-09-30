@@ -45,3 +45,17 @@ def forget_memory(key: str) -> str:
     if memory.forget(normalize_key(key)):
         return f"✓ Oublié : {normalize_key(key)}"
     return f"Aucun souvenir avec la clé « {key.strip()} ». Utilise list_memories pour voir les clés."
+
+
+@tool
+def recall_conversations(query: str = "", limit: int = 5) -> str:
+    """Search summaries of past conversations with the user (empty query = most recent)."""
+    from core.persistent_memory import get_memory
+    try:
+        limit = max(1, min(int(limit), 10))
+    except (TypeError, ValueError):
+        limit = 5
+    items = get_memory().episodes(query.strip() if isinstance(query, str) else "", limit=limit)
+    if not items:
+        return "Aucune conversation passée ne correspond." if query else "Aucune conversation archivée pour le moment."
+    return "\n".join(f"[{e['created_at'][:16].replace('T', ' ')} UTC] {e['summary']}" for e in items)

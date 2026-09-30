@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Brain, Trash2, Lightbulb, Loader2 } from "lucide-react";
+import { Brain, Trash2, Lightbulb, Loader2, MessagesSquare } from "lucide-react";
 import { useJarvisStore } from "../../stores/jarvisStore";
 
 const API = "http://127.0.0.1:8765/api";
@@ -14,6 +14,12 @@ interface Fact {
 interface Lesson {
   id: number;
   lesson: string;
+  created_at: string;
+}
+
+interface Episode {
+  id: number;
+  summary: string;
   created_at: string;
 }
 
@@ -33,6 +39,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 export function MemoryTab() {
   const [facts, setFacts] = useState<Fact[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [auto, setAuto] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -45,6 +52,7 @@ export function MemoryTab() {
       .then((d) => {
         setFacts(d.facts ?? []);
         setLessons(d.lessons ?? []);
+        setEpisodes(d.episodes ?? []);
         setAuto(Boolean(d.auto));
         setError("");
       })
@@ -76,6 +84,11 @@ export function MemoryTab() {
   const forgetLesson = async (id: number) => {
     setLessons((l) => l.filter((x) => x.id !== id));
     await fetch(`${API}/lessons/${id}`, { method: "DELETE" }).catch(() => {});
+  };
+
+  const forgetEpisode = async (id: number) => {
+    setEpisodes((e) => e.filter((x) => x.id !== id));
+    await fetch(`${API}/episodes/${id}`, { method: "DELETE" }).catch(() => {});
   };
 
   const grouped = facts.reduce<Record<string, Fact[]>>((acc, f) => {
@@ -146,6 +159,35 @@ export function MemoryTab() {
                 </button>
               </div>
             ))}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <div className="text-[9px] tracking-[0.2em] text-blue-400/50">CONVERSATIONS PASSÉES ({episodes.length})</div>
+        {!loading && episodes.length === 0 && (
+          <div className="text-[10px] text-blue-400/40">Les conversations sont résumées et archivées automatiquement.</div>
+        )}
+        {episodes.map((e) => (
+          <div
+            key={e.id}
+            className="flex items-start gap-2 px-2.5 py-1.5 rounded-lg"
+            style={{ background: "rgba(0,212,255,0.03)", border: "1px solid rgba(0,212,255,0.1)" }}
+          >
+            <MessagesSquare size={11} className="text-cyan-400/60 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <span className="text-[8px] font-mono text-blue-400/50">
+                {new Date(e.created_at + "Z").toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
+              </span>
+              <div className="text-[10px] text-white/70 break-words">{e.summary}</div>
+            </div>
+            <button
+              onClick={() => void forgetEpisode(e.id)}
+              title="Oublier cette conversation"
+              className="opacity-40 hover:opacity-100 text-red-400 transition-opacity"
+            >
+              <Trash2 size={11} />
+            </button>
           </div>
         ))}
       </div>

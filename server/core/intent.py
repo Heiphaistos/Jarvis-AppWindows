@@ -41,6 +41,12 @@ _BRIEFING_RE = re.compile(
     r"\b(briefing|fais[- ]moi (le|un) (point|topo|résumé)|quoi de neuf|récap(itulatif)? du jour|point du (jour|matin))\b",
     re.IGNORECASE,
 )
+_CONVERSATIONS_RE = re.compile(
+    r"de\s+quoi\s+(?:on\s+(?:a|avait)|avons[- ]nous|nous\s+avons)\s+parl[ée]|"
+    r"on\s+(?:a|avait)\s+parl[ée]\s+de\s+quoi|"
+    r"(?:notre|la)\s+(?:dernière|précédente|derniere|precedente)\s+(?:conversation|discussion)",
+    re.IGNORECASE,
+)
 _IP_RE = re.compile(r"\bip\s+publique\b|\bmon\s+ip\b", re.IGNORECASE)
 
 
@@ -90,5 +96,8 @@ def fast_route(text: str) -> tuple[str, dict] | None:
 
     if _BRIEFING_RE.search(text):
         return "briefing", {}
+
+    if _CONVERSATIONS_RE.search(text):
+        return "recall_conversations", {"query": ""}
 
     return None
