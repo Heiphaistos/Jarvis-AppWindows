@@ -112,6 +112,14 @@ MÉMOIRE:
   forget_memory(key) — oublie un souvenir
   recall_conversations(query, limit) — retrouve les conversations passées
 
+CONTRÔLE DU PC (Windows) — cible par défaut : la fenêtre au premier plan avant JARVIS :
+  list_windows() — fenêtres ouvertes
+  window_action(window, action) — focus, minimize, maximize, restore, close (window = partie du titre)
+  type_text(text, window="", press_enter=False) — tape du texte (accents compris)
+  press_keys(keys, window="") — raccourcis : « ctrl+s », « alt+tab », « win+d », « enter »
+  fill_form(values, window="", submit=False) — remplit les champs à la suite (Tab entre chaque)
+  Pour taper dans une appli fermée : open_application puis type_text avec window.
+
 DIAGNOSTIC PC (via NiTriTe Agent, lecture seule) :
   pc_diagnostic(topic) — batterie, disques, temperatures, plantages, demarrage, sante, performances, materiel ou all
   pc_health_report() — rapport complet enregistré dans Documents/JARVIS/Rapports
