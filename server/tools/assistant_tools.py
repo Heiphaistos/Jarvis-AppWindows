@@ -302,5 +302,20 @@ def briefing(city: str = "") -> str:
     except Exception:
         pass
     parts.append(get_system_info())
+    parts.append(_pc_alerts())
     parts.append(get_news("", 3))
-    return "\n\n".join(parts)
+    return "\n\n".join(p for p in parts if p)
+
+
+def _pc_alerts() -> str:
+    """Alertes santé du PC (batterie, disques, températures) si NiTriTe Agent tourne."""
+    try:
+        from core import nitrite
+        if not nitrite.is_running():
+            return ""
+        from tools.pc_tools import TOPICS, _collect, alerts
+        raw, _, _ = _collect(TOPICS["batterie"] + TOPICS["disques"] + TOPICS["temperatures"])
+        found = alerts(raw)
+        return "Santé du PC : " + (" ".join(found) if found else "rien à signaler.")
+    except Exception:
+        return ""
