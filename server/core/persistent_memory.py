@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 import sqlite3
 import threading
 from pathlib import Path
@@ -14,6 +15,9 @@ def _resolve_db_path() -> Path:
     return Path(__file__).parent.parent / "data" / "jarvis_memory.db"
 _DB_PATH = _resolve_db_path()
 _instance: "PersistentMemory | None" = None
+
+# Toujours rappelées, quelle que soit la demande.
+_CORE_CATEGORIES = {"identite", "preferences"}
 
 
 def get_memory() -> "PersistentMemory":
@@ -55,6 +59,10 @@ class PersistentMemory:
                 context TEXT NOT NULL,
                 lesson TEXT NOT NULL,
                 created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(category);
             CREATE INDEX IF NOT EXISTS idx_memories_updated ON memories(updated_at DESC);
@@ -140,6 +148,19 @@ class PersistentMemory:
         lines += [f"- {r['lesson']}" for r in rows]
         return "\n".join(lines)
 
+    def lessons(self, limit: int = 50) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, lesson, created_at FROM lessons ORDER BY created_at DESC LIMIT ?", (limit,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def forget_lesson(self, lesson_id: int) -> bool:
+        with self._lock:
+            cur = self._conn.execute("DELETE FROM lessons WHERE id = ?", (lesson_id,))
+            self._conn.commit()
+        return bool(cur.rowcount)
+
     def add_episode(self, summary: str) -> None:
         now = datetime.utcnow().isoformat()
         with self._lock:
@@ -148,15 +169,60 @@ class PersistentMemory:
             )
             self._conn.commit()
 
-    def get_context_summary(self) -> str:
-        """Returns formatted memories for injection into the system prompt."""
+    def forget(self, key: str) -> bool:
+        """Supprime un souvenir par clé exacte. True si quelque chose a été oublié."""
+        with self._lock:
+            cur = self._conn.execute("DELETE FROM memories WHERE key = ?", (key.strip(),))
+            self._conn.commit()
+        if cur.rowcount:
+            logger.info(f"Souvenir oublié: {key}")
+        return bool(cur.rowcount)
+
+    def facts(self) -> list[dict]:
+        """Tous les souvenirs (clé, valeur, catégorie), du plus récent au plus ancien."""
         with self._lock:
             rows = self._conn.execute(
-                "SELECT key, value, category FROM memories ORDER BY updated_at DESC LIMIT 25"
+                "SELECT key, value, category, updated_at FROM memories ORDER BY updated_at DESC"
             ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_setting(self, key: str, default: str = "") -> str:
+        with self._lock:
+            row = self._conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else default
+
+    def set_setting(self, key: str, value: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO settings(key, value) VALUES(?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (key, value),
+            )
+            self._conn.commit()
+
+    def get_context_summary(self, query: str = "", limit: int = 30) -> str:
+        """Souvenirs à injecter dans le system prompt.
+
+        L'identité et les préférences passent toujours ; le reste est trié par
+        pertinence avec la demande (mots communs), puis par fraîcheur.
+        """
+        rows = self.facts()
         if not rows:
             return ""
+        words = {w for w in re.findall(r"[a-zà-ÿ0-9]{4,}", (query or "").lower())}
+
+        def score(r: dict) -> int:
+            s = 0
+            if r["category"] in _CORE_CATEGORIES:
+                s += 100
+            if words:
+                text = f"{r['key']} {r['value']}".lower()
+                s += 10 * sum(1 for w in words if w in text)
+            return s
+
+        # sorted est stable : à score égal, l'ordre de fraîcheur est conservé.
+        chosen = sorted(rows, key=score, reverse=True)[:limit]
         lines = ["\n\n## CE QUE JARVIS SAIT SUR MONSIEUR (mémoire persistante)\n"]
-        for r in rows:
+        for r in chosen:
             lines.append(f"- [{r['category']}] {r['key']}: {r['value']}")
         return "\n".join(lines)

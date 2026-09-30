@@ -49,6 +49,42 @@ async def memories_count() -> dict:
         return {"count": 0}
 
 
+class AutoMemoryRequest(BaseModel):
+    enabled: bool
+
+
+@router.get("/memories")
+async def memories_list() -> dict:
+    """Tout ce que JARVIS sait sur Monsieur + leçons apprises + état de la mémoire auto."""
+    from core.auto_memory import is_enabled
+    from core.persistent_memory import get_memory
+    memory = get_memory()
+    return {"facts": memory.facts(), "lessons": memory.lessons(), "auto": is_enabled()}
+
+
+@router.delete("/memories/{key}")
+async def memories_forget(key: str) -> dict:
+    from core.persistent_memory import get_memory
+    if not get_memory().forget(key):
+        raise HTTPException(status_code=404, detail="Souvenir introuvable")
+    return {"ok": True}
+
+
+@router.delete("/lessons/{lesson_id}")
+async def lessons_forget(lesson_id: int) -> dict:
+    from core.persistent_memory import get_memory
+    if not get_memory().forget_lesson(lesson_id):
+        raise HTTPException(status_code=404, detail="Leçon introuvable")
+    return {"ok": True}
+
+
+@router.post("/memories/auto")
+async def memories_auto(req: AutoMemoryRequest) -> dict:
+    from core.auto_memory import is_enabled, set_enabled
+    set_enabled(req.enabled)
+    return {"auto": is_enabled()}
+
+
 @router.get("/voices", response_model=VoicesResponse)
 async def list_voices() -> VoicesResponse:
     voices: list[str] = []

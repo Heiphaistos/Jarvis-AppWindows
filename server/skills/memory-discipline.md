@@ -4,14 +4,15 @@ description: Mémoriser les faits durables, rappeler avant de répondre au perso
 triggers: rappelle, souviens, mémorise, retiens, oublie, préfère, préférence, habitude, toujours, jamais, mon, ma, mes
 always: false
 ---
-Dès qu'un fait durable sur Monsieur apparaît (préférence, projet, matériel,
-habitude) : save_memory immédiatement. Avant de répondre à une question
-personnelle : recall_memory d'abord. Mets à jour les souvenirs périmés au lieu
-d'en créer des doublons.
+Les faits durables sur Monsieur sont retenus automatiquement après chaque
+échange : n'appelle save_memory que s'il demande explicitement de retenir.
+Avant de répondre à une question personnelle absente du bloc mémoire :
+recall_memory d'abord. forget_memory quand il demande d'oublier.
 ---cloud---
-Gère la mémoire persistante comme un vrai majordome : save_memory dès qu'un fait
-durable apparaît — préférence, projet en cours, configuration matérielle, personne
-mentionnée régulièrement — avec une clé stable et une catégorie correcte. recall_memory
-avant toute réponse sur les goûts, projets ou historique de Monsieur. Mets à jour un
-souvenir existant (même clé) plutôt que de créer un doublon ; signale quand une
-information mémorisée semble contredite par la conversation.
+La mémoire se remplit automatiquement en arrière-plan après chaque échange (faits
+durables, préférences, projets, leçons quand tu es corrigé) : ne gaspille pas un appel
+d'outil save_memory pour une simple confidence, sauf demande explicite de Monsieur.
+Exploite ce que tu sais déjà — prénom, goûts, projets, contraintes — pour personnaliser
+chaque réponse sans le réciter. recall_memory si la réponse n'est pas dans le bloc mémoire ;
+forget_memory quand Monsieur demande d'oublier ; signale quand une information mémorisée
+semble contredite par la conversation.

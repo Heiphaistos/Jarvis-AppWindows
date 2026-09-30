@@ -380,6 +380,42 @@ async def _tts_sentence_worker(
             pass  # WebSocket déjà fermé — normal à la déconnexion
 
 
+# Tâches d'apprentissage en arrière-plan (référencées pour ne pas être
+# ramassées par le GC avant la fin).
+_learning_tasks: set[asyncio.Task] = set()
+
+
+def _previous_assistant(memory: ContextMemory) -> str:
+    """Dernière réponse de JARVIS avant le message en cours (contexte des corrections)."""
+    return next(
+        (m["content"] for m in reversed(memory.get_messages()) if m["role"] == "assistant"), ""
+    )
+
+
+def _learn_in_background(
+    ws: WebSocket, providers: ProviderManager, user_text: str, answer: str, previous: str,
+) -> None:
+    """Mémoire automatique : retient faits durables et leçons après la réponse,
+    sans retarder la conversation."""
+    async def _run() -> None:
+        from core.auto_memory import describe, learn_from_exchange
+        learned = await learn_from_exchange(providers, user_text, answer, previous)
+        if learned:
+            try:
+                await manager.send(ws, "memory_update", {
+                    "saved": [f.__dict__ for f in learned.saved],
+                    "forgotten": learned.forgotten,
+                    "lesson": learned.lesson,
+                    "summary": describe(learned),
+                })
+            except Exception:
+                pass  # client déconnecté entre-temps : la mémoire est quand même à jour
+
+    task = asyncio.create_task(_run())
+    _learning_tasks.add(task)
+    task.add_done_callback(_learning_tasks.discard)
+
+
 # Cache par connexion du system prompt local (stable → cache KV llama-cpp
 # préservé). Clé : id(memory) — une ContextMemory par connexion.
 _system_cache: dict[int, str] = {}
@@ -395,6 +431,7 @@ async def handle_text_query(
     tts_enabled: bool = True,
 ) -> None:
     await manager.send(ws, "status", {"status": "processing"})
+    previous = _previous_assistant(memory)
     memory.add_user(text)
     message_id = str(uuid.uuid4())
 
@@ -454,6 +491,7 @@ async def handle_text_query(
 
     if final_text:
         memory.add_assistant(final_text)
+    _learn_in_background(ws, providers, text, final_text, previous)
 
     await manager.send(ws, "agent_step", {"phase": "done", "detail": "", "messageId": message_id})
     await manager.send(ws, "message_done", {"messageId": message_id})
@@ -471,6 +509,7 @@ async def handle_council_query(
     """Mode Conseil : toutes les IA disponibles répondent en parallèle, la plus
     capable arbitre et synthétise la meilleure réponse."""
     await manager.send(ws, "status", {"status": "processing"})
+    previous = _previous_assistant(memory)
     memory.add_user(text)
     message_id = str(uuid.uuid4())
 
@@ -489,6 +528,7 @@ async def handle_council_query(
 
     await manager.send(ws, "token", {"token": best, "messageId": message_id})
     memory.add_assistant(best)
+    _learn_in_background(ws, providers, text, best, previous)
 
     if tts_enabled and tts.is_available and best:
         tts_queue: asyncio.Queue[str | None] = asyncio.Queue()
@@ -587,7 +627,20 @@ async def websocket_handler(
     query_task: asyncio.Task | None = None  # requête en cours — annulable via stop_generation
     live = None  # session Gemini Live (conversation vocale temps réel), None hors mode LIVE
 
+    live_turn = {"user": "", "assistant": "", "previous": ""}  # transcriptions du tour LIVE
+
     async def _live_send(event_type: str, data: dict) -> None:
+        # La mémoire automatique apprend aussi des conversations LIVE : les
+        # transcriptions arrivent par fragments, on les assemble par tour.
+        if event_type == "live_transcript":
+            role = "user" if data.get("role") == "user" else "assistant"
+            live_turn[role] += str(data.get("text", ""))
+        elif event_type == "live_turn_complete":
+            user_text = live_turn["user"].strip()
+            answer = live_turn["assistant"].strip()
+            if user_text:
+                _learn_in_background(ws, providers, user_text, answer, live_turn["previous"])
+            live_turn.update(user="", assistant="", previous=answer or live_turn["previous"])
         try:
             await manager.send(ws, event_type, data)
         except Exception:
