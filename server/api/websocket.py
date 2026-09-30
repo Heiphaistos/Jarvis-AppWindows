@@ -47,7 +47,13 @@ RICH_TOOLS = {"deep_research", "read_webpage"}
 _RICH_MAX_TOKENS = 1536
 
 
-def _tool_followup(name: str, args: dict | None, result: str) -> str:
+def _tool_followup(name: str, args: dict | None, result: str, chain: bool = False) -> str:
+    """Message qui réinjecte le résultat d'un outil dans la conversation.
+
+    chain : le cerveau peut enchaîner sur un autre outil si la demande a
+    plusieurs étapes (« regarde la météo et mets un rappel s'il pleut »).
+    Désactivé en local (le 7B boucle) et au dernier tour de la boucle.
+    """
     header = f"[RÉSULTAT OUTIL {name}({args})]" if args is not None else f"[RÉSULTAT OUTIL {name}]"
     if name in RICH_TOOLS:
         return (
@@ -57,11 +63,24 @@ def _tool_followup(name: str, args: dict | None, result: str) -> str:
             "quand elles sont numérotées, contradictions et incertitudes signalées. N'émets une "
             "nouvelle balise JARVIS_TOOL que si une information indispensable manque vraiment."
         )
+    if chain:
+        return (
+            f"{header}\n{result}\n\n"
+            "Si la demande de Monsieur comporte encore une étape (autre action ou information "
+            "nécessaire), émets maintenant la balise JARVIS_TOOL de l'outil suivant, sans texte "
+            "autour. Sinon, réponds directement en français, en une ou deux phrases, en rendant "
+            "compte de tout ce qui a été fait. Ne rappelle jamais un outil déjà exécuté avec les "
+            "mêmes arguments."
+        )
     return (
         f"{header}\n{result}\n\n"
         "Réponds directement à Monsieur en français, en une ou deux phrases, à partir de ce "
         "résultat. N'émets PAS de balise JARVIS_TOOL — le résultat est déjà là."
     )
+
+
+def _call_key(name: str, args: dict) -> str:
+    return f"{name}:{json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)}"
 
 
 async def _agent_loop(
@@ -107,6 +126,7 @@ async def _agent_loop(
     # Fast-path : outil déjà exécuté par le routeur d'intention — le LLM ne
     # fait que formuler la réponse à partir du résultat.
     rich = False  # un dossier (recherche, page web) attend une vraie synthèse
+    executed: dict[str, str] = {}  # appels déjà faits dans ce tour → jamais deux fois
     if preexecuted is not None:
         name, args, result = preexecuted
         used_tools = True
@@ -115,7 +135,11 @@ async def _agent_loop(
             "phase": "tool", "detail": name, "messageId": message_id,
         })
         await manager.send(ws, "tool_result", {"tool": name, "result": str(result)[:300]})
-        messages = messages + [{"role": "user", "content": _tool_followup(name, args, result)}]
+        executed[_call_key(name, args)] = result
+        messages = messages + [{
+            "role": "user",
+            "content": _tool_followup(name, args, result, chain=providers.tier == "cloud"),
+        }]
 
     tag_open = "<JARVIS_TOOL>"
     tool_schemas = tools.schemas() if hasattr(tools, "schemas") else None
@@ -213,12 +237,21 @@ async def _agent_loop(
                 "phase": "tool", "detail": name, "messageId": message_id,
             })
             await manager.send(ws, "tool_result", {"tool": name, "result": f"⚙️ Exécution de {name}..."})
-            # Exécuter l'outil dans un thread (opération bloquante possible)
-            try:
-                result = await asyncio.to_thread(tools.execute, name, **args)
-            except Exception as e:
-                result = f"Erreur outil {name}: {e}"
-                logger.error(f"Tool execution error: {e}", exc_info=True)
+            key = _call_key(name, args)
+            repeated = key in executed
+            if repeated:
+                # Le cerveau redemande le même appel : on ne ré-exécute pas (un
+                # rappel créé deux fois, un mail envoyé deux fois…), on force la réponse.
+                logger.info(f"Appel répété ignoré : {name}({args})")
+                result = executed[key]
+            else:
+                # Exécuter l'outil dans un thread (opération bloquante possible)
+                try:
+                    result = await asyncio.to_thread(tools.execute, name, **args)
+                except Exception as e:
+                    result = f"Erreur outil {name}: {e}"
+                    logger.error(f"Tool execution error: {e}", exc_info=True)
+                executed[key] = str(result)
 
             # Envoyer le résultat au client
             await manager.send(ws, "tool_result", {"tool": name, "result": str(result)[:300]})
@@ -246,7 +279,12 @@ async def _agent_loop(
             # Réinjecter dans le contexte pour la prochaine itération LLM
             messages = messages + [
                 {"role": "assistant", "content": full_response},
-                {"role": "user", "content": _tool_followup(name, None, str(result))},
+                {"role": "user", "content": _tool_followup(
+                    name, None, str(result),
+                    # Enchaînement possible sauf en local, sur un appel répété ou au dernier tour.
+                    chain=providers.tier == "cloud" and not repeated
+                    and _iteration < MAX_AGENT_ITERATIONS - 2,
+                )},
             ]
             continue  # Prochaine itération
 
