@@ -62,3 +62,14 @@ def test_extraction_html():
 
 def test_media_action_inconnue():
     assert "inconnue" in media_control("danser")
+
+
+def test_briefing_assemble_les_sources(store, monkeypatch):
+    import tools.info_tools as info
+    from tools.assistant_tools import briefing
+    monkeypatch.setattr(info, "get_weather", lambda city: f"Météo {city} : 18°C")
+    monkeypatch.setattr(info, "get_news", lambda topic="", max_results=5: "Titre 1")
+    monkeypatch.setattr(info, "get_system_info", lambda: "CPU: 5%")
+    set_timer(10, "pâtes")
+    out = briefing("Lyon")
+    assert "Météo Lyon : 18°C" in out and "pâtes" in out and "CPU: 5%" in out and "Titre 1" in out

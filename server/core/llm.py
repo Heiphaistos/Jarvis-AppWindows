@@ -112,6 +112,7 @@ ASSISTANT:
   media_control(action) — play_pause, next, previous, stop, mute, volume_up, volume_down
   analyze_screen(question="") — regarde l'écran et répond (vision)
   analyze_image(path, question="") — analyse une image du disque
+  briefing(city="") — point complet : date, météo, rappels, machine, actualité
 
 Commence directement ta réponse. Pas de préambule, pas de "Bien sûr !" inutile.\
 """

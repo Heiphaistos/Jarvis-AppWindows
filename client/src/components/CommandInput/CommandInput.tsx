@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { Mic, MicOff, Send, Zap, CheckCircle, Network, Square, Activity, CloudSun, Clock, Camera } from "lucide-react";
+import { Mic, MicOff, Send, Zap, CheckCircle, Network, Square, Activity, CloudSun, Clock, Newspaper, Eye } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useJarvis } from "../../hooks/useJarvis";
 import { useJarvisStore } from "../../stores/jarvisStore";
@@ -20,10 +20,11 @@ export function CommandInput() {
   const isDisabled = !isConnected || isBusy;
 
   const QUICK_ACTIONS = [
+    { icon: Newspaper, label: "Briefing", query: "Fais-moi le point" },
     { icon: Activity, label: "Diagnostic", query: "Fais un diagnostic complet du système" },
     { icon: CloudSun, label: "Météo", query: "Quelle est la météo à Paris ?" },
     { icon: Clock, label: "Heure", query: "Quelle heure est-il ?" },
-    { icon: Camera, label: "Capture", query: "Prends une capture d'écran" },
+    { icon: Eye, label: "Vision", query: "Regarde mon écran et dis-moi ce que tu vois" },
   ];
 
   const handleSubmit = useCallback(() => {
