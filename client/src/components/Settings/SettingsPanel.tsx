@@ -16,6 +16,9 @@ interface VoiceOption {
 
 // Voix masculines uniquement — l'identité vocale JARVIS
 const VOICE_OPTIONS: VoiceOption[] = [
+  { id: "gemini:Charon", label: "Charon — Gemini", description: "Voix grave et posée, ton de majordome IA (clé Gemini de l'onglet CERVEAU)" },
+  { id: "gemini:Orus", label: "Orus — Gemini", description: "Voix ferme et assurée, très « armure » (clé Gemini)" },
+  { id: "gemini:Iapetus", label: "Iapetus — Gemini", description: "Voix claire et précise (clé Gemini)" },
   { id: "edge:fr-FR-HenriNeural", label: "Henri — Neural", description: "Voix masculine profonde et naturelle, esprit JARVIS (en ligne, secours local auto)" },
   { id: "edge:fr-FR-RemyMultilingualNeural", label: "Rémy — Neural", description: "Voix masculine jeune et fluide (en ligne, secours local auto)" },
   { id: "fr_FR-upmc-medium",  label: "UPMC — Local",  description: "Voix masculine française 100 % hors-ligne" },
@@ -230,6 +233,7 @@ export function SettingsPanel() {
                         <div className="flex flex-col gap-1.5">
                           {VOICE_OPTIONS.filter((v) =>
                             v.id.startsWith("edge:") ||
+                            v.id.startsWith("gemini:") ||
                             availableVoices.length === 0 ||
                             availableVoices.includes(v.id)
                           ).map((voice) => {

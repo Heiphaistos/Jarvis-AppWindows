@@ -2,7 +2,7 @@
   <h1>J.A.R.V.I.S.</h1>
   <p><strong>Assistant IA local style Iron Man — Cerveau multi-API (local ou cloud), wake word « Hey Jarvis », HUD holographique 3D, 28 outils.</strong></p>
 
-  ![Version](https://img.shields.io/badge/version-4.6.0-blue)
+  ![Version](https://img.shields.io/badge/version-4.7.0-blue)
   ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?logo=windows)
   ![Stack](https://img.shields.io/badge/stack-Tauri%20v2%20%2B%20Python%20FastAPI-purple)
   ![CUDA](https://img.shields.io/badge/CUDA-12.1%2B-76B900?logo=nvidia)
@@ -16,6 +16,18 @@
 J.A.R.V.I.S. (*Just A Rather Very Intelligent System*) est un assistant IA local inspiré de l'Iron Man de Marvel. Par défaut il tourne sans aucune connexion cloud : le LLM Mistral-7B Q4 est exécuté localement via CUDA, la reconnaissance vocale (STT) et la synthèse vocale (TTS) sont assurées par Faster-Whisper et Piper. Depuis la v4.0, le cerveau est interchangeable : n'importe quelle API compatible OpenAI (OpenAI, Gemini, Ollama, Groq, DeepSeek, xAI, OpenRouter, Mistral, LM Studio, vLLM…) ou l'API Anthropic native peut prendre le relais, avec bascule automatique sur le cerveau local en cas de panne. Une boucle agent « Fable » (réflexion → outils → vérification) enchaîne jusqu'à 5 appels d'outils par message, guidée par 6 disciplines de raisonnement routées par intention, avec mémoire persistante et journal de leçons SQLite entre les sessions.
 
 ---
+
+## Nouveautés 4.7 — cerveau AUTO et voix Gemini
+
+- **Routage multi-modèles (mode AUTO)** : chaque demande est classée en *instantané* (salutations, ordres, reformulation d'un résultat d'outil), *standard* ou *profond* (analyse, code, rédaction). Chaque niveau a sa chaîne de cerveaux, par défaut :
+  - instantané : Cerebras → Groq → Gemini 2.5 Flash-Lite → Claude Haiku 4.5 → …
+  - standard : Gemini 2.5 Flash → Claude Sonnet 5.5 → OpenAI → Groq → …
+  - profond : Claude Opus 5.5 → Gemini 2.5 Pro → OpenAI → DeepSeek → …
+  Seuls les cerveaux dont la clé est configurée sont utilisés ; le cerveau local reste le dernier recours.
+- **Course au premier mot** : si le premier cerveau n'a rien dit après 0,6 s (instantané), 1,2 s (standard) ou 2,5 s (profond), le suivant démarre en parallèle ; le premier qui parle gagne, l'autre est annulé.
+- **Télémétrie** : latence du premier mot et débit (tokens/s) mesurés pour chaque cerveau ; en instantané, le plus rapide passe devant ; deux échecs d'affilée mettent un cerveau en pause 90 s. Le HUD affiche le modèle, le niveau et la latence de chaque réponse.
+- **Voix Gemini** (Charon, Orus, Iapetus) : voix neurales graves, jouées avec une consigne de ton « majordome IA posé ». Elles utilisent la clé Gemini de l'onglet CERVEAU ; Edge Henri puis Piper prennent le relais en cas de quota ou de coupure. Modèle et consigne réglables avec `JARVIS_GEMINI_TTS_MODEL` et `JARVIS_GEMINI_TTS_STYLE`.
+- Chaînes modifiables via `POST /api/providers` (`{"name": "auto", "chains": {"deep": ["anthropic", "gemini@gemini-2.5-pro"]}}`), format `preset` ou `preset@modèle`.
 
 ## Fonctionnalités
 

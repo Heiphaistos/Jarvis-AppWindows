@@ -53,6 +53,7 @@ async def _agent_loop(
     tts_queue: "asyncio.Queue[str]",
     system: str,
     preexecuted: tuple[str, dict, str] | None = None,
+    level: str = "standard",
 ) -> str:
     """Boucle agent : LLM → tool → LLM → ... → réponse finale (max 5 itérations)."""
     accumulated = ""
@@ -60,12 +61,20 @@ async def _agent_loop(
         from utils.perf import active_profile
         max_tokens = active_profile().max_tokens
     else:
-        max_tokens = 1024
+        from core.providers.router import MAX_TOKENS
+        max_tokens = MAX_TOKENS.get(level, 1024)
     used_tools = False
     lesson_recorded = False
     user_query = next(
         (m["content"][:200] for m in reversed(messages) if m["role"] == "user"), ""
     )
+
+    async def _notify_route(provider, ttft: float, lvl: str) -> None:
+        # Le HUD affiche quel cerveau a répondu, à quel niveau et en combien de temps.
+        await manager.send(ws, "brain", {
+            "messageId": message_id, "level": lvl, "provider": provider.name,
+            "label": provider.label, "model": provider.model, "ttftMs": round(ttft * 1000),
+        })
 
     async def _notify_fallback(label: str) -> None:
         await manager.send(ws, "notice", {
@@ -124,6 +133,9 @@ async def _agent_loop(
         in_tool_tag = False
         async for token in providers.stream(
             system, messages, max_tokens=max_tokens, on_fallback=_notify_fallback,
+            # Après un outil, la reformulation est triviale : cerveau le plus rapide.
+            level="instant" if (preexecuted is not None or used_tools) and level != "deep" else level,
+            on_route=_notify_route,
         ):
             full_response += token
             if in_tool_tag:
@@ -268,7 +280,7 @@ async def _verify_pass(
     try:
         chunks = [
             token
-            async for token in providers.stream(system, verify_messages, max_tokens=200)
+            async for token in providers.stream(system, verify_messages, max_tokens=200, level="instant")
         ]
     except Exception as e:
         logger.warning(f"Passe de vérification échouée: {e}")
@@ -371,6 +383,12 @@ async def handle_text_query(
         except Exception as e:
             logger.warning(f"Fast-path {name} en échec ({e}) — retour boucle agent")
 
+    from core.providers.router import classify
+    level = classify(text, tool_result_ready=preexecuted is not None)
+    await manager.send(ws, "agent_step", {
+        "phase": "thinking", "detail": f"Niveau {level.upper()}", "messageId": message_id,
+    })
+
     # ── Agent loop (multi-tool, max MAX_AGENT_ITERATIONS) ──────────────────
     tts_queue: asyncio.Queue[str | None] = asyncio.Queue()
     tts_task = None
@@ -389,6 +407,7 @@ async def handle_text_query(
             tts_queue=tts_queue,
             system=system,
             preexecuted=preexecuted,
+            level=level,
         )
     finally:
         if tts_task:
@@ -681,7 +700,14 @@ async def websocket_handler(
 
             elif event_type == "set_voice":
                 voice_id = str(payload.get("voice", "")).strip()
-                if voice_id.startswith("edge:"):
+                if voice_id.startswith("gemini:"):
+                    from core.tts import GEMINI_VOICES
+                    name = voice_id[7:]
+                    if name in GEMINI_VOICES:
+                        tts.set_gemini_voice(name)
+                    else:
+                        logger.warning(f"Voix Gemini inconnue: {name}")
+                elif voice_id.startswith("edge:"):
                     # Voix neurale Edge-TTS — validation stricte du nom
                     edge_name = voice_id[5:]
                     if re.fullmatch(r"[a-zA-Z]{2}-[a-zA-Z]{2}-[a-zA-Z0-9]+", edge_name):
