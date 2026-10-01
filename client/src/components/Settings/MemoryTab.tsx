@@ -102,13 +102,13 @@ export function MemoryTab() {
         onClick={() => void toggleAuto()}
         className="flex items-start gap-3 p-3 rounded-xl text-left transition-all"
         style={{
-          background: auto ? "rgba(0,212,255,0.08)" : "rgba(255,255,255,0.02)",
-          border: `1px solid ${auto ? "rgba(0,212,255,0.3)" : "rgba(255,255,255,0.06)"}`,
+          background: auto ? "rgb(var(--accent-rgb) / 0.08)" : "rgba(255,255,255,0.02)",
+          border: `1px solid ${auto ? "rgb(var(--accent-rgb) / 0.3)" : "rgba(255,255,255,0.06)"}`,
         }}
       >
         <Brain size={16} className={auto ? "text-cyan-400 mt-0.5" : "text-blue-400/40 mt-0.5"} />
         <div className="flex-1">
-          <div className="text-[12px] font-bold tracking-wider" style={{ color: auto ? "#00d4ff" : "#ffffff88" }}>
+          <div className="text-[12px] font-bold tracking-wider" style={{ color: auto ? "var(--accent)" : "#ffffff88" }}>
             MÉMOIRE AUTOMATIQUE
             <span className={`ml-2 text-[8px] ${auto ? "text-green-400" : "text-blue-400/40"}`}>
               {auto ? "● ACTIVE" : "○ COUPÉE"}
@@ -172,7 +172,7 @@ export function MemoryTab() {
           <div
             key={e.id}
             className="flex items-start gap-2 px-2.5 py-1.5 rounded-lg"
-            style={{ background: "rgba(0,212,255,0.03)", border: "1px solid rgba(0,212,255,0.1)" }}
+            style={{ background: "rgb(var(--accent-rgb) / 0.03)", border: "1px solid rgb(var(--accent-rgb) / 0.1)" }}
           >
             <MessagesSquare size={11} className="text-cyan-400/60 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">

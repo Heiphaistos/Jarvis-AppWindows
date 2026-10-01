@@ -8,16 +8,12 @@ interface BootLine {
 }
 
 function ArcReactor({ ignited }: { ignited: boolean }) {
-  const glow = ignited ? "#00d4ff" : "#123";
   return (
     <div className="relative w-40 h-40">
       <motion.div
         className="absolute inset-0 rounded-full"
-        animate={
-          ignited
-            ? { boxShadow: [`0 0 40px ${glow}66`, `0 0 90px ${glow}aa`, `0 0 40px ${glow}66`] }
-            : {}
-        }
+        style={ignited ? { boxShadow: "0 0 80px rgb(var(--accent-rgb) / 0.6)" } : undefined}
+        animate={ignited ? { opacity: [0.45, 1, 0.45] } : {}}
         transition={{ duration: 2, repeat: Infinity }}
       />
       <svg viewBox="0 0 200 200" className="w-full h-full">
@@ -37,7 +33,7 @@ function ArcReactor({ ignited }: { ignited: boolean }) {
               <line
                 key={i}
                 x1={x1} y1={y1} x2={x2} y2={y2}
-                stroke={ignited ? "#00d4ff" : "#1a3a55"}
+                stroke={ignited ? "var(--accent)" : "#1a3a55"}
                 strokeWidth="6"
                 strokeLinecap="round"
                 opacity={ignited ? 0.9 : 0.4}
@@ -45,7 +41,7 @@ function ArcReactor({ ignited }: { ignited: boolean }) {
             );
           })}
         </motion.g>
-        <circle cx="100" cy="100" r="70" fill="none" stroke={ignited ? "#00d4ff" : "#1a3a55"} strokeWidth="2" opacity="0.7" />
+        <circle cx="100" cy="100" r="70" fill="none" stroke={ignited ? "var(--accent)" : "#1a3a55"} strokeWidth="2" opacity="0.7" />
         {/* Anneau interne contre-rotatif */}
         <motion.g
           animate={{ rotate: -360 }}
@@ -75,7 +71,7 @@ function ArcReactor({ ignited }: { ignited: boolean }) {
           fill={ignited ? "#e0fbff" : "#0a1a2a"}
           animate={ignited ? { r: [17, 20, 17] } : {}}
           transition={{ duration: 1.6, repeat: Infinity }}
-          style={{ filter: ignited ? "drop-shadow(0 0 12px #00d4ff)" : undefined }}
+          style={{ filter: ignited ? "drop-shadow(0 0 12px var(--accent))" : undefined }}
         />
       </svg>
     </div>
@@ -126,7 +122,7 @@ export function BootSequence() {
     <AnimatePresence>
       <motion.div
         className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 cursor-pointer select-none"
-        style={{ background: "radial-gradient(ellipse at center, #041322 0%, #010810 70%)" }}
+        style={{ background: "radial-gradient(ellipse at center, color-mix(in srgb, var(--accent) 10%, var(--bg-2)) 0%, var(--bg) 70%)" }}
         exit={{ opacity: 0, scale: 1.06 }}
         transition={{ duration: 0.6 }}
         onClick={() => setBootDone(true)}
@@ -135,8 +131,8 @@ export function BootSequence() {
         <ArcReactor ignited={ignited} />
 
         <motion.h1
-          className="text-4xl font-bold tracking-[0.7em] text-cyan-400 pl-[0.7em]"
-          style={{ textShadow: "0 0 30px #00d4ff, 0 0 80px #00d4ff55" }}
+          className="text-4xl font-bold tracking-[0.5em] text-white pl-[0.5em]"
+          style={{ fontFamily: "var(--font-display)", textShadow: "0 0 30px var(--accent), 0 0 80px rgb(var(--accent-rgb) / 0.33)" }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
@@ -144,10 +140,10 @@ export function BootSequence() {
           J.A.R.V.I.S.
         </motion.h1>
 
-        <div className="w-[420px] font-mono text-[11px] leading-relaxed">
+        <div className="w-[min(480px,90vw)] font-mono text-[12px] leading-relaxed">
           {lines.slice(0, visibleLines).map((line, i) => {
             const st = line.status();
-            const color = st === "ok" ? "#00ff88" : st === "warn" ? "#ffaa00" : "#00d4ff";
+            const color = st === "ok" ? "#00ff88" : st === "warn" ? "#ffaa00" : "var(--accent)";
             const tag = st === "ok" ? "OK" : st === "warn" ? "ATTN" : "…";
             return (
               <motion.div
@@ -164,7 +160,7 @@ export function BootSequence() {
         </div>
 
         <motion.p
-          className="text-[9px] tracking-[0.4em] text-cyan-700"
+          className="text-[10px] tracking-[0.4em] text-cyan-600 font-mono"
           animate={{ opacity: [0.3, 0.8, 0.3] }}
           transition={{ duration: 2, repeat: Infinity }}
         >

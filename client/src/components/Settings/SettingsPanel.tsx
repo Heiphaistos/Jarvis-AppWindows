@@ -17,7 +17,7 @@ interface VoiceOption {
 
 // Voix masculines uniquement — l'identité vocale JARVIS
 const VOICE_OPTIONS: VoiceOption[] = [
-  { id: "gemini:Charon", label: "Charon — Gemini", description: "Voix grave et posée, ton de majordome IA (clé Gemini de l'onglet CERVEAU)" },
+  { id: "gemini:Charon", label: "Charon — Gemini", description: "Voix grave et posée, ton de majordome IA (clé Gemini de l'onglet Cerveau)" },
   { id: "gemini:Orus", label: "Orus — Gemini", description: "Voix ferme et assurée, très « armure » (clé Gemini)" },
   { id: "gemini:Iapetus", label: "Iapetus — Gemini", description: "Voix claire et précise (clé Gemini)" },
   { id: "edge:fr-FR-HenriNeural", label: "Henri — Neural", description: "Voix masculine profonde et naturelle, esprit JARVIS (en ligne, secours local auto)" },
@@ -116,77 +116,55 @@ export function SettingsPanel() {
   };
 
   const tabs = [
-    { id: "voice" as const, label: "VOIX", icon: <Volume2 size={11} /> },
-    { id: "brain" as const, label: "CERVEAU", icon: <Cpu size={11} /> },
-    { id: "memory" as const, label: "MÉMOIRE", icon: <Brain size={11} /> },
-    { id: "perf" as const, label: "PERF", icon: <Gauge size={11} /> },
-    { id: "theme" as const, label: "THÈME", icon: <Palette size={11} /> },
-    { id: "services" as const, label: "SERVICES", icon: <Globe size={11} /> },
+    { id: "voice" as const, label: "Voix", icon: <Volume2 /> },
+    { id: "brain" as const, label: "Cerveau", icon: <Cpu /> },
+    { id: "memory" as const, label: "Mémoire", icon: <Brain /> },
+    { id: "perf" as const, label: "Performances", icon: <Gauge /> },
+    { id: "theme" as const, label: "Apparence", icon: <Palette /> },
+    { id: "services" as const, label: "Services", icon: <Globe /> },
   ];
 
   return (
     <>
-      <motion.button
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
-        onClick={() => setOpen((v) => !v)}
-        className="w-7 h-7 flex items-center justify-center rounded text-blue-400/40 hover:text-cyan-400 hover:bg-cyan-400/10 transition-colors"
-        title="Paramètres"
-      >
-        <Settings size={14} />
-      </motion.button>
+      <button className="icon-btn" onClick={() => setOpen((v) => !v)} title="Paramètres" aria-label="Paramètres">
+        <Settings />
+      </button>
 
       {createPortal(
       <AnimatePresence>
         {open && (
-          /* Portal vers body : le backdrop-filter du header (glass) créerait
-             sinon un containing block qui piège cette modale `fixed` en haut */
+          /* Portal vers body : un ancêtre avec backdrop-filter piégerait cette modale `fixed` */
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center"
-            style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+            className="modal-backdrop"
             onPointerDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.92, y: 20 }}
+              initial={{ opacity: 0, scale: 0.95, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.92, y: 20 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-              className="w-[380px]"
+              exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              className="modal"
+              role="dialog"
+              aria-label="Paramètres"
               onPointerDown={(e) => e.stopPropagation()}
-              style={{
-                  background: "linear-gradient(135deg, rgba(0,15,40,0.98), rgba(0,8,25,0.99))",
-                  border: "1px solid rgba(0,212,255,0.2)",
-                  borderRadius: "6px",
-                  backdropFilter: "blur(24px)",
-                  boxShadow: "0 0 60px #00d4ff18, 0 30px 80px rgba(0,0,0,0.9)",
-                }}
-              >
-                {/* Header */}
-                <div className="flex items-center justify-between px-5 py-3 border-b border-cyan-900/30">
-                  <div className="flex items-center gap-2">
-                    <Settings size={12} className="text-cyan-400/60" />
-                    <span className="text-[11px] tracking-widest text-cyan-400/80 font-bold">PARAMÈTRES J.A.R.V.I.S.</span>
-                  </div>
-                  <button onClick={() => setOpen(false)} className="text-blue-400/40 hover:text-red-400 transition-colors">
-                    <X size={14} />
+            >
+                <div className="modal-head">
+                  <h2>PARAMÈTRES</h2>
+                  <button className="icon-btn" onClick={() => setOpen(false)} title="Fermer" aria-label="Fermer">
+                    <X />
                   </button>
                 </div>
 
-                {/* Tabs */}
-                <div className="flex border-b border-cyan-900/20">
+                <div className="modal-tabs" role="tablist">
                   {tabs.map((tab) => (
                     <button
                       key={tab.id}
+                      role="tab"
+                      aria-selected={activeTab === tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[9px] tracking-widest transition-all"
-                      style={{
-                        color: activeTab === tab.id ? "#00d4ff" : "#ffffff30",
-                        borderBottom: activeTab === tab.id ? "1px solid #00d4ff" : "1px solid transparent",
-                        background: activeTab === tab.id ? "rgba(0,212,255,0.05)" : "transparent",
-                      }}
                     >
                       {tab.icon}
                       {tab.label}
@@ -194,7 +172,7 @@ export function SettingsPanel() {
                   ))}
                 </div>
 
-                <div className="p-5 flex flex-col gap-5 max-h-[70vh] overflow-y-auto">
+                <div className="modal-body">
                   {/* ── VOICE TAB ── */}
                   {activeTab === "voice" && (
                     <>
@@ -215,15 +193,15 @@ export function SettingsPanel() {
                             onClick={toggleTts}
                             className="relative w-10 h-5 rounded-full transition-all"
                             style={{
-                              background: ttsEnabled ? "rgba(0,212,255,0.3)" : "rgba(255,255,255,0.05)",
-                              border: `1px solid ${ttsEnabled ? "rgba(0,212,255,0.5)" : "rgba(255,255,255,0.1)"}`,
+                              background: ttsEnabled ? "rgb(var(--accent-rgb) / 0.3)" : "rgba(255,255,255,0.05)",
+                              border: `1px solid ${ttsEnabled ? "rgb(var(--accent-rgb) / 0.5)" : "rgba(255,255,255,0.1)"}`,
                             }}
                           >
                             <motion.div
                               animate={{ x: ttsEnabled ? 20 : 2 }}
                               transition={{ type: "spring", stiffness: 500, damping: 30 }}
                               className="absolute top-0.5 w-4 h-4 rounded-full"
-                              style={{ background: ttsEnabled ? "#00d4ff" : "#ffffff22", boxShadow: ttsEnabled ? "0 0 8px #00d4ff" : "none" }}
+                              style={{ background: ttsEnabled ? "var(--accent)" : "#ffffff22", boxShadow: ttsEnabled ? "0 0 8px var(--accent)" : "none" }}
                             />
                           </button>
                         </div>
@@ -246,20 +224,20 @@ export function SettingsPanel() {
                                 onClick={() => applyVoice(voice.id)}
                                 className="flex items-start gap-3 p-2.5 rounded text-left transition-all"
                                 style={{
-                                  background: isSelected ? "rgba(0,212,255,0.1)" : "rgba(255,255,255,0.02)",
-                                  border: `1px solid ${isSelected ? "rgba(0,212,255,0.3)" : "rgba(255,255,255,0.05)"}`,
+                                  background: isSelected ? "rgb(var(--accent-rgb) / 0.1)" : "rgba(255,255,255,0.02)",
+                                  border: `1px solid ${isSelected ? "rgb(var(--accent-rgb) / 0.3)" : "rgba(255,255,255,0.05)"}`,
                                 }}
                               >
                                 <div
                                   className="mt-0.5 w-2 h-2 rounded-full flex-shrink-0"
                                   style={{
-                                    background: isSelected ? "#00d4ff" : "transparent",
-                                    border: `1px solid ${isSelected ? "#00d4ff" : "rgba(255,255,255,0.2)"}`,
-                                    boxShadow: isSelected ? "0 0 6px #00d4ff" : "none",
+                                    background: isSelected ? "var(--accent)" : "transparent",
+                                    border: `1px solid ${isSelected ? "var(--accent)" : "rgba(255,255,255,0.2)"}`,
+                                    boxShadow: isSelected ? "0 0 6px var(--accent)" : "none",
                                   }}
                                 />
                                 <div>
-                                  <div className="text-[11px] font-bold tracking-wider" style={{ color: isSelected ? "#00d4ff" : "#ffffff66" }}>
+                                  <div className="text-[11px] font-bold tracking-wider" style={{ color: isSelected ? "var(--accent)" : "#ffffff66" }}>
                                     {voice.label}
                                   </div>
                                   <div className="text-[9px] text-blue-400/30 mt-0.5">{voice.description}</div>
@@ -284,15 +262,15 @@ export function SettingsPanel() {
                             onClick={() => setArmorFx(!armorFx)}
                             className="relative w-10 h-5 rounded-full transition-all"
                             style={{
-                              background: armorFx ? "rgba(0,212,255,0.3)" : "rgba(255,255,255,0.05)",
-                              border: `1px solid ${armorFx ? "rgba(0,212,255,0.5)" : "rgba(255,255,255,0.1)"}`,
+                              background: armorFx ? "rgb(var(--accent-rgb) / 0.3)" : "rgba(255,255,255,0.05)",
+                              border: `1px solid ${armorFx ? "rgb(var(--accent-rgb) / 0.5)" : "rgba(255,255,255,0.1)"}`,
                             }}
                           >
                             <motion.div
                               animate={{ x: armorFx ? 20 : 2 }}
                               transition={{ type: "spring", stiffness: 500, damping: 30 }}
                               className="absolute top-0.5 w-4 h-4 rounded-full"
-                              style={{ background: armorFx ? "#00d4ff" : "#ffffff22", boxShadow: armorFx ? "0 0 8px #00d4ff" : "none" }}
+                              style={{ background: armorFx ? "var(--accent)" : "#ffffff22", boxShadow: armorFx ? "0 0 8px var(--accent)" : "none" }}
                             />
                           </button>
                         </div>
@@ -320,15 +298,15 @@ export function SettingsPanel() {
                             disabled={!wakeWordAvailable}
                             className="relative w-10 h-5 rounded-full transition-all disabled:opacity-30"
                             style={{
-                              background: wakeWordEnabled ? "rgba(0,212,255,0.3)" : "rgba(255,255,255,0.05)",
-                              border: `1px solid ${wakeWordEnabled ? "rgba(0,212,255,0.5)" : "rgba(255,255,255,0.1)"}`,
+                              background: wakeWordEnabled ? "rgb(var(--accent-rgb) / 0.3)" : "rgba(255,255,255,0.05)",
+                              border: `1px solid ${wakeWordEnabled ? "rgb(var(--accent-rgb) / 0.5)" : "rgba(255,255,255,0.1)"}`,
                             }}
                           >
                             <motion.div
                               animate={{ x: wakeWordEnabled ? 20 : 2 }}
                               transition={{ type: "spring", stiffness: 500, damping: 30 }}
                               className="absolute top-0.5 w-4 h-4 rounded-full"
-                              style={{ background: wakeWordEnabled ? "#00d4ff" : "#ffffff22", boxShadow: wakeWordEnabled ? "0 0 8px #00d4ff" : "none" }}
+                              style={{ background: wakeWordEnabled ? "var(--accent)" : "#ffffff22", boxShadow: wakeWordEnabled ? "0 0 8px var(--accent)" : "none" }}
                             />
                           </button>
                         </div>
@@ -351,10 +329,9 @@ export function SettingsPanel() {
                   {/* ── BRAIN TAB ── */}
                   {activeTab === "brain" && <ProvidersTab />}
 
-                  {/* ── MEMORY TAB ── */}
+                  {/* ── PERF TAB ── */}
                   {activeTab === "memory" && <MemoryTab />}
 
-                  {/* ── PERF TAB ── */}
                   {activeTab === "perf" && <PerfTab />}
 
                   {/* ── THEME TAB ── */}
@@ -426,7 +403,7 @@ export function SettingsPanel() {
                             <button
                               onClick={() => fileInputRef.current?.click()}
                               className="flex items-center justify-center gap-2 py-2.5 rounded text-[10px] tracking-widest transition-all"
-                              style={{ background: "rgba(0,212,255,0.08)", border: "1px solid rgba(0,212,255,0.2)", color: "#00d4ff" }}
+                              style={{ background: "rgb(var(--accent-rgb) / 0.08)", border: "1px solid rgb(var(--accent-rgb) / 0.2)", color: "var(--accent)" }}
                             >
                               <Upload size={12} />
                               Importer credentials.json
@@ -442,7 +419,7 @@ export function SettingsPanel() {
                             <button
                               onClick={connectGmail}
                               className="flex items-center justify-center gap-2 py-2.5 rounded text-[10px] tracking-widest transition-all"
-                              style={{ background: "rgba(0,212,255,0.08)", border: "1px solid rgba(0,212,255,0.25)", color: "#00d4ff" }}
+                              style={{ background: "rgb(var(--accent-rgb) / 0.08)", border: "1px solid rgb(var(--accent-rgb) / 0.25)", color: "var(--accent)" }}
                             >
                               <Mail size={12} />
                               Connecter Gmail
@@ -467,8 +444,6 @@ export function SettingsPanel() {
                   )}
                 </div>
 
-                {/* Bottom accent */}
-                <div className="h-px mx-5 mb-3" style={{ background: "linear-gradient(90deg, transparent, #00d4ff22, transparent)" }} />
             </motion.div>
           </motion.div>
         )}

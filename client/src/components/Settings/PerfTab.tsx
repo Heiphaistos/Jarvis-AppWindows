@@ -99,14 +99,14 @@ export function PerfTab() {
               disabled={reloading}
               className="flex items-start gap-3 p-3 rounded-xl text-left transition-all disabled:opacity-50"
               style={{
-                background: isActive ? "rgba(0,212,255,0.1)" : "rgba(255,255,255,0.02)",
-                border: `1px solid ${isActive ? "rgba(0,212,255,0.35)" : "rgba(255,255,255,0.06)"}`,
+                background: isActive ? "rgb(var(--accent-rgb) / 0.1)" : "rgba(255,255,255,0.02)",
+                border: `1px solid ${isActive ? "rgb(var(--accent-rgb) / 0.35)" : "rgba(255,255,255,0.06)"}`,
               }}
             >
               <Icon size={16} className={isActive ? "text-cyan-400 mt-0.5" : "text-blue-400/40 mt-0.5"} />
               <div className="flex-1">
                 <div className="text-[12px] font-bold tracking-wider"
-                  style={{ color: isActive ? "#00d4ff" : "#ffffff88" }}>
+                  style={{ color: isActive ? "var(--accent)" : "#ffffff88" }}>
                   {p.label}
                   {isActive && <span className="ml-2 text-[8px] text-green-400">● ACTIF</span>}
                 </div>

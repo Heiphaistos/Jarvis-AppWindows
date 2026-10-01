@@ -112,6 +112,10 @@ export type ThemeName =
 export type HoloStyle = "sphere" | "reactor" | "galaxy" | "dna" | "matrix" | "vortex";
 export type HoloDensity = "low" | "normal" | "high";
 export type HoloSpeed = "slow" | "normal" | "fast";
+export type SkinName = "holo" | "minimal" | "aurora" | "tactical";
+export type LayoutName = "hud" | "immersive" | "split" | "compact";
+export const SKINS: SkinName[] = ["holo", "minimal", "aurora", "tactical"];
+export const LAYOUTS: LayoutName[] = ["hud", "immersive", "split", "compact"];
 
 export const THEMES: Record<ThemeName, { label: string; accent: string; accentSoft: string }> = {
   arctic:   { label: "Arctic (classique)", accent: "#00d4ff", accentSoft: "#0088aa" },
@@ -327,6 +331,10 @@ interface JarvisState {
   setHoloSpeed: (s: HoloSpeed) => void;
   layoutSide: "left" | "right";
   setLayoutSide: (s: "left" | "right") => void;
+  skin: SkinName;
+  setSkin: (s: SkinName) => void;
+  layout: LayoutName;
+  setLayout: (l: LayoutName) => void;
 
   setStatus: (status: JarvisStatus) => void;
   setConnected: (v: boolean) => void;
@@ -418,6 +426,16 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
   setHoloSpeed: (holoSpeed) => {
     localStorage.setItem("jarvis_holo_speed", holoSpeed);
     set({ holoSpeed });
+  },
+  skin: _stored("jarvis_skin", SKINS, "holo"),
+  setSkin: (skin) => {
+    localStorage.setItem("jarvis_skin", skin);
+    set({ skin });
+  },
+  layout: _stored("jarvis_layout_mode", LAYOUTS, "hud"),
+  setLayout: (layout) => {
+    localStorage.setItem("jarvis_layout_mode", layout);
+    set({ layout });
   },
   layoutSide: _stored("jarvis_layout", ["left", "right"] as const, "left"),
   setLayoutSide: (layoutSide) => {

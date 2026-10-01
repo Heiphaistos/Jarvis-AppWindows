@@ -1,5 +1,5 @@
-import { useJarvisStore } from "../../stores/jarvisStore";
 import React from "react";
+import { useJarvisStore } from "../../stores/jarvisStore";
 import { motion } from "framer-motion";
 import type { Message as MsgType } from "../../types";
 
@@ -179,9 +179,9 @@ function renderTextSegment(text: string, segKey: number): React.ReactNode {
           <li key={i} className="flex items-start gap-2">
             <span
               className="mt-[7px] flex-shrink-0 w-1 h-1 rounded-full"
-              style={{ background: "rgba(0,212,255,0.6)" }}
+              style={{ background: "rgb(var(--accent-rgb) / 0.6)" }}
             />
-            <span className="text-cyan-50/90">{renderInline(item)}</span>
+            <span>{renderInline(item)}</span>
           </li>
         ))}
       </ul>
@@ -197,11 +197,11 @@ function renderTextSegment(text: string, segKey: number): React.ReactNode {
           <li key={i} className="flex items-start gap-2">
             <span
               className="flex-shrink-0 font-mono text-[11px]"
-              style={{ color: "rgba(0,212,255,0.6)", minWidth: "1rem" }}
+              style={{ color: "rgb(var(--accent-rgb) / 0.6)", minWidth: "1rem" }}
             >
               {i + 1}.
             </span>
-            <span className="text-cyan-50/90">{renderInline(item)}</span>
+            <span>{renderInline(item)}</span>
           </li>
         ))}
       </ol>
@@ -281,7 +281,7 @@ function renderTextSegment(text: string, segKey: number): React.ReactNode {
         }
       } else {
         nodes.push(
-          <p key={`p-${segKey}-${key++}`} className="text-cyan-50/90 leading-relaxed">
+          <p key={`p-${segKey}-${key++}`} className="leading-relaxed">
             {renderInline(line)}
           </p>
         );
@@ -296,21 +296,21 @@ function renderTextSegment(text: string, segKey: number): React.ReactNode {
 function MarkdownContent({ content }: { content: string }) {
   const segments = splitCodeBlocks(content);
   return (
-    <div className="flex flex-col gap-1 text-sm">
+    <div className="flex flex-col gap-1">
       {segments.map((seg, i) => {
         if (seg.kind === "code") {
           return (
             <div
               key={i}
               className="rounded overflow-hidden my-1"
-              style={{ background: "rgba(0,0,0,0.5)", border: "1px solid rgba(0,212,255,0.15)" }}
+              style={{ background: "rgba(0,0,0,0.5)", border: "1px solid rgb(var(--accent-rgb) / 0.15)" }}
             >
               {/* Header bar */}
               <div
                 className="flex items-center px-3 py-1 border-b"
-                style={{ borderColor: "rgba(0,212,255,0.15)", background: "rgba(0,212,255,0.05)" }}
+                style={{ borderColor: "rgb(var(--accent-rgb) / 0.15)", background: "rgb(var(--accent-rgb) / 0.05)" }}
               >
-                <span className="text-[10px] font-mono tracking-widest" style={{ color: "#00d4ff" }}>
+                <span className="text-[10px] font-mono tracking-widest" style={{ color: "var(--accent)" }}>
                   {seg.lang.toUpperCase()}
                 </span>
               </div>
@@ -349,14 +349,8 @@ export function Message({ message }: Props) {
 
   if (isSystem) {
     return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="flex justify-center mb-3"
-      >
-        <div className="px-3 py-1 text-[10px] tracking-widest rounded border border-yellow-500/20 bg-yellow-900/10 text-yellow-400/70">
-          ⚡ {message.content}
-        </div>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="msg-sys">
+        {message.content}
       </motion.div>
     );
   }
@@ -366,94 +360,28 @@ export function Message({ message }: Props) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className={`flex ${isUser ? "justify-end" : "justify-start"} mb-4`}
+      className={`msg ${isUser ? "msg-user" : "msg-bot"}`}
     >
-      {/* JARVIS avatar indicator */}
-      {!isUser && (
-        <div className="flex-shrink-0 w-6 mt-1 mr-2 flex flex-col items-center gap-1">
-          <div
-            className="w-1.5 h-1.5 rounded-full"
-            style={{ background: "#00d4ff", boxShadow: "0 0 6px #00d4ff" }}
-          />
-          <div className="flex-1 w-px bg-cyan-900/40" />
-        </div>
-      )}
-
-      <div className={`max-w-[78%] flex flex-col ${isUser ? "items-end" : "items-start"}`}>
-        {/* Label */}
-        <div className="text-[9px] tracking-widest mb-1 px-1" style={{ color: isUser ? "#00d4ffaa" : "#00ff88aa" }}>
-          {isUser ? "VOUS" : "J.A.R.V.I.S."}
-          {!isUser && brain && (
-            <span className="ml-2 font-mono tracking-normal text-blue-200/40" title={`${brain.label} · niveau ${brain.level}`}>
-              {brain.model} · {brain.ttftMs} ms
-            </span>
-          )}
-        </div>
-
-        {/* Bubble */}
-        <div
-          className="relative group px-4 py-2.5 text-sm leading-relaxed"
-          style={
-            isUser
-              ? {
-                  background: "linear-gradient(135deg, rgba(0,120,190,0.30), rgba(0,60,130,0.38))",
-                  border: "1px solid rgba(0,212,255,0.22)",
-                  borderRadius: "18px 6px 18px 18px",
-                  backdropFilter: "blur(14px) saturate(150%)",
-                  boxShadow: "0 4px 24px rgba(0,0,0,0.25), 0 0 20px #00d4ff0d, inset 0 1px 0 rgba(255,255,255,0.06)",
-                }
-              : {
-                  background: "linear-gradient(150deg, rgba(10,28,54,0.55), rgba(3,12,28,0.65))",
-                  border: "1px solid rgba(0,180,220,0.14)",
-                  borderRadius: "6px 18px 18px 18px",
-                  backdropFilter: "blur(14px) saturate(150%)",
-                  boxShadow: "0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)",
-                }
-          }
-        >
-          {/* Top accent line for JARVIS */}
-          {!isUser && (
-            <div className="absolute top-0 left-0 right-0 h-px rounded-t-full" style={{ background: "linear-gradient(90deg, #00d4ff44, transparent)" }} />
-          )}
-
-          <MarkdownContent content={message.content} />
-
-          {/* Timestamp */}
-          <div className="text-right text-[9px] text-blue-400/35 mt-1.5 font-mono tracking-widest">
-            {time}
-          </div>
-
-          {/* Copy button (JARVIS messages only) */}
-          {!isUser && (
-            <button
-              onClick={handleCopy}
-              title="Copier le message"
-              className="absolute top-1 right-1 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity p-1 rounded bg-black/30 text-cyan-600 hover:text-cyan-300"
-            >
-              {copied ? (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              ) : (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                </svg>
-              )}
-            </button>
-          )}
-        </div>
+      <div className="who">
+        <span>{isUser ? "VOUS" : "J.A.R.V.I.S."}</span>
+        <em title={brain ? `${brain.label} · niveau ${brain.level}` : undefined}>
+          {!isUser && brain ? `${brain.model} · ${brain.ttftMs} ms · ` : ""}{time}
+        </em>
       </div>
-
-      {/* User avatar indicator */}
-      {isUser && (
-        <div className="flex-shrink-0 w-6 mt-1 ml-2 flex flex-col items-center gap-1">
-          <div
-            className="w-1.5 h-1.5 rounded-full"
-            style={{ background: "#00d4ff", boxShadow: "0 0 6px #00d4ff88" }}
-          />
-          <div className="flex-1 w-px bg-cyan-900/40" />
-        </div>
+      <MarkdownContent content={message.content} />
+      {!isUser && (
+        <button onClick={handleCopy} title="Copier le message" className="msg-copy">
+          {copied ? (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          ) : (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          )}
+        </button>
       )}
     </motion.div>
   );

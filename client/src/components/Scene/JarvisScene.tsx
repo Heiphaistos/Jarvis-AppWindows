@@ -1,5 +1,5 @@
 import { useMemo, useRef } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useJarvisStore, getTtsAnalyser, accentOf } from "../../stores/jarvisStore";
 import type { HoloStyle, HoloDensity, HoloSpeed } from "../../stores/jarvisStore";
@@ -284,6 +284,17 @@ function CoreGlow({ intense }: { intense?: boolean }) {
   );
 }
 
+/** Recule la caméra pour que l'hologramme (anneaux compris, ~3 unités de
+ *  demi-largeur) tienne en entier, quel que soit le format du panneau. */
+function FitCamera() {
+  const { camera, size } = useThree();
+  const aspect = size.width / Math.max(size.height, 1);
+  const k = Math.tan((48 / 2) * (Math.PI / 180));
+  camera.position.z = Math.max(5.2, 2.6 / k, 3.0 / (k * aspect));
+  camera.updateProjectionMatrix();
+  return null;
+}
+
 /** Hologramme 3D animé — style et couleur pilotés par le thème du store.
  *  Remplit son conteneur parent (position: relative requis). */
 export function JarvisScene() {
@@ -304,6 +315,7 @@ export function JarvisScene() {
         gl={{ antialias: true, alpha: true, powerPreference: "low-power" }}
         dpr={[1, 1.5]}
       >
+        <FitCamera />
         <ParticleCloud
           key={`${holoStyle}-${count}`}
           style={holoStyle}
