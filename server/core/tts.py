@@ -99,6 +99,9 @@ def speakable(text: str) -> str:
     return t if re.search(r"[A-Za-zÀ-ÿ0-9]", t) else ""
 
 
+DEFAULT_EDGE_VOICE = "fr-FR-HenriNeural"
+
+
 class TTSManager:
     """Deux moteurs : Edge-TTS (voix neurales naturelles, en ligne) et Piper
     (local). Si la voix active est Edge et que le réseau échoue, bascule
@@ -117,8 +120,11 @@ class TTSManager:
         self._gemini_key: Callable[[], str] = lambda: ""
         self._piper_ok = self._piper_exe.exists() and self._voice.exists()
         if not self._piper_ok:
+            # Sans voix locale (Linux sans Piper, serveur web) : voix neurale en
+            # ligne Henri plutôt qu'un JARVIS muet.
+            self._edge_voice = DEFAULT_EDGE_VOICE
             logger.warning(
-                "Piper TTS non disponible — placez piper.exe + voix .onnx dans server/models/piper/"
+                f"Piper TTS non disponible ({self._piper_exe.parent}) — voix en ligne {DEFAULT_EDGE_VOICE}"
             )
 
     @property
@@ -167,6 +173,8 @@ class TTSManager:
         self._voice = voice_path
         self._speaker = _male_speaker_id(voice_path)
         self._piper_ok = self._piper_exe.exists() and voice_path.exists()
+        if not self._piper_ok:
+            self._edge_voice = DEFAULT_EDGE_VOICE  # voix locale absente : rester audible
         logger.info(f"Voix TTS changée: {voice_path.name} (speaker={self._speaker})")
 
     def set_edge_voice(self, voice_name: str) -> None:

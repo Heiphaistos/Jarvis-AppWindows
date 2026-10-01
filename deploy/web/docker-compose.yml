@@ -1,0 +1,30 @@
+# Version web de JARVIS sur le VPS, derrière nginx (HTTPS obligatoire : le
+# navigateur n'autorise le micro qu'en HTTPS).
+#   cp deploy/web/.env.example deploy/web/.env   # puis remplir
+#   docker compose -f deploy/web/docker-compose.yml up -d --build
+services:
+  jarvis-web:
+    build:
+      context: ../..
+      dockerfile: deploy/web/Dockerfile
+    image: jarvis-web:latest
+    container_name: jarvis-web
+    restart: unless-stopped
+    env_file: .env
+    # Uniquement en local : seul nginx (même machine) y accède.
+    ports:
+      - "127.0.0.1:8790:8765"
+    volumes:
+      - jarvis-data:/data
+    mem_limit: 512m
+    cpus: 1.0
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  jarvis-data:

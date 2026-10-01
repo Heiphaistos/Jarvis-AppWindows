@@ -8,10 +8,15 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .manage(SidecarState(Mutex::new(None)))
+        .manage(SidecarState(Mutex::new(None), Mutex::new(None)))
         .manage(AudioStateInner(Mutex::new(None)))
         .setup(|app| {
             let state = app.state::<SidecarState>();
+            // Ressources du bundle : à côté de l'exe sous Windows, /usr/lib/JARVIS
+            // (ou l'AppImage) sous Linux.
+            if let Ok(dir) = app.path().resource_dir() {
+                *state.1.lock().unwrap() = Some(dir);
+            }
             if let Err(e) = commands::sidecar::launch_server(&state) {
                 eprintln!("[JARVIS] Serveur non démarré automatiquement: {e}");
             }

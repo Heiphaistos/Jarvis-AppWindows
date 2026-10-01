@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
-import site, sys
+import sys
+import sysconfig
 from pathlib import Path
 
 block_cipher = None
@@ -7,14 +8,14 @@ block_cipher = None
 # Collecter les données nécessaires à faster-whisper et llama-cpp
 added_datas = []
 
-# Trouver les DLLs CUDA/cuBLAS pour llama-cpp-python
-import glob, os
-venv_site = Path(sys.executable).parent.parent / "Lib" / "site-packages"
+# site-packages du venv courant (Windows : Lib/site-packages, Linux : lib/pythonX.Y/site-packages)
+venv_site = Path(sysconfig.get_paths()["purelib"])
+NATIVE = "*.dll" if sys.platform == "win32" else "*.so*"
 
-# llama_cpp — inclure les DLLs natives (racine + lib/)
+# llama_cpp — inclure les bibliothèques natives (racine + lib/)
 llama_cpp_path = venv_site / "llama_cpp"
 if llama_cpp_path.exists():
-    for dll in llama_cpp_path.glob("*.dll"):
+    for dll in llama_cpp_path.glob(NATIVE):
         added_datas.append((str(dll), "llama_cpp"))
     llama_lib = llama_cpp_path / "lib"
     if llama_lib.exists():
@@ -26,9 +27,9 @@ if llama_cpp_path.exists():
 # DANS llama_cpp/lib, à côté de ggml-cuda.dll, sinon LoadLibrary ouvre une
 # boîte d'erreur invisible et le chargement du modèle reste bloqué.
 for _nv_sub in ("cublas", "cuda_runtime"):
-    _nv_bin = venv_site / "nvidia" / _nv_sub / "bin"
+    _nv_bin = venv_site / "nvidia" / _nv_sub / ("bin" if sys.platform == "win32" else "lib")
     if _nv_bin.exists():
-        for dll in _nv_bin.glob("*.dll"):
+        for dll in _nv_bin.glob(NATIVE):
             added_datas.append((str(dll), "llama_cpp/lib"))
 
 # faster_whisper — assets
@@ -48,6 +49,14 @@ skills_dir = Path("skills")
 if skills_dir.exists():
     for f in skills_dir.glob("*.md"):
         added_datas.append((str(f), "skills"))
+
+# Interface web (client/dist) : servie par le serveur en mode panneau web
+# (--web) — à compiler AVANT (npm run build dans client/).
+web_dist = Path("..") / "client" / "dist"
+if (web_dist / "index.html").exists():
+    added_datas.append((str(web_dist), "web"))
+else:
+    print("ATTENTION : client/dist absent — le panneau web (--web) ne sera pas embarqué.")
 
 # pkgutil.iter_modules (auto-découverte des outils, fournisseurs) ne voit rien
 # en mode frozen : embarquer tous les sous-modules des paquets du serveur.
@@ -99,11 +108,8 @@ a = Analysis(
         "PIL.Image",
         "psutil",
         "ctypes",
-        "ctypes.wintypes",
-        "win32api",
-        "win32con",
-        "win32gui",
-    ] + local_modules,
+    ] + (["ctypes.wintypes", "win32api", "win32con", "win32gui"] if sys.platform == "win32" else [])
+      + local_modules,
     hookspath=[],
     runtime_hooks=[],
     excludes=["tkinter", "matplotlib", "IPython", "jupyter"],

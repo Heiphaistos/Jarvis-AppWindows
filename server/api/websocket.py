@@ -718,9 +718,11 @@ async def websocket_handler(
     tools: ToolRegistry,
     max_context_messages: int = 20,
 ) -> None:
-    # Origin check — reject connections from unexpected origins
+    # Origin check — reject connections from unexpected origins (en mode web,
+    # le middleware d'accès a déjà validé l'origine ET la session).
+    from api.security import get_access
     origin = ws.headers.get("origin", "")
-    if origin and origin not in ALLOWED_ORIGINS:
+    if origin and not get_access().web and origin not in ALLOWED_ORIGINS:
         logger.warning(f"Origine WebSocket refusée: {origin!r}")
         await ws.close(code=4403, reason="Origin not allowed")
         return

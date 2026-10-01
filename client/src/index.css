@@ -232,6 +232,8 @@ code, pre, .font-mono { font-family: var(--font-mono); }
 .segmented svg { width: 15px; height: 15px; flex: none; }
 @media (max-width: 900px) { .tb-clock { display: none; } }
 @media (max-width: 1180px) { .segmented .seg-label { display: none; } .segmented button { padding: 0 10px; } }
+/* Téléphone (version web) : la marque laisse la place aux dispositions. */
+@media (max-width: 640px) { .brand-name { display: none; } .segmented button { padding: 0 8px; } }
 
 .icon-btn {
   width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px;
@@ -516,3 +518,32 @@ code, pre, .font-mono { font-family: var(--font-mono); }
 .opt-preview { height: 62px; border-radius: 9px; overflow: hidden; position: relative; display: grid; gap: 4px; padding: 6px; }
 .opt-preview i { display: block; border-radius: 4px; }
 }
+
+/* ── Panneau web (navigateur) ─────────────────────────────────────────────── */
+.web-menu {
+  position: fixed; right: 12px; top: calc(var(--titlebar-h, 48px) + 6px); z-index: 1000; min-width: 230px;
+  padding: 12px; display: flex; flex-direction: column; gap: 4px; background: var(--panel-solid);
+}
+.web-menu-row {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 8px; border-radius: 8px;
+  font-size: 13px; color: var(--ink-soft); text-align: left; cursor: pointer;
+}
+.web-menu-row:hover { background: rgb(var(--accent-rgb) / 0.1); color: var(--ink); }
+.web-menu-row.danger:hover { color: var(--red); background: rgb(255 68 102 / 0.1); }
+.web-menu-row input { accent-color: var(--accent); }
+.gate { min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--bg); color: var(--ink); }
+.gate-card { width: min(380px, 100%); padding: 28px 24px; text-align: center; line-height: 1.55; color: var(--ink-soft); }
+.gate-card b, .gate-card code { color: var(--accent); }
+.gate-form { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+.gate-form label { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-mute); }
+.gate-form input {
+  padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgb(0 0 0 / 0.3);
+  color: var(--ink); font-size: 16px; outline: none;
+}
+.gate-form input:focus { border-color: var(--accent); }
+.gate-form button {
+  padding: 10px; border-radius: 10px; background: rgb(var(--accent-rgb) / 0.16); color: var(--accent);
+  border: 1px solid rgb(var(--accent-rgb) / 0.4); font-weight: 600; cursor: pointer;
+}
+.gate-form button:disabled { opacity: 0.5; cursor: default; }
+.gate-error { color: var(--red); font-size: 13px; }

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Settings, X, Volume2, VolumeX, Mic, Globe, Mail, CheckCircle, AlertCircle, Upload, Cpu, Ear, Gauge, Palette, Shield, Brain } from "lucide-react";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { SERVER_ORIGIN, gmailRedirectUri, openExternal } from "../../lib/platform";
 import { useJarvisStore } from "../../stores/jarvisStore";
 import { ProvidersTab } from "./ProvidersTab";
 import { PerfTab } from "./PerfTab";
@@ -49,7 +49,7 @@ export function SettingsPanel() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8765/api/voices")
+    fetch(`${SERVER_ORIGIN}/api/voices`)
       .then((r) => r.json())
       .then((d) => setAvailableVoices(d.voices ?? []))
       .catch(() => setAvailableVoices(["fr_FR-upmc-medium"]));
@@ -57,7 +57,7 @@ export function SettingsPanel() {
 
   useEffect(() => {
     if (!open) return;
-    fetch("http://127.0.0.1:8765/api/auth/gmail/status")
+    fetch(`${SERVER_ORIGIN}/api/auth/gmail/status`)
       .then((r) => r.json())
       .then((d) => {
         setGmailStatus(d.status as GmailStatus);
@@ -82,7 +82,7 @@ export function SettingsPanel() {
     if (!file) return;
     const fd = new FormData();
     fd.append("file", file);
-    const res = await fetch("http://127.0.0.1:8765/api/auth/gmail/upload_credentials", {
+    const res = await fetch(`${SERVER_ORIGIN}/api/auth/gmail/upload_credentials`, {
       method: "POST",
       body: fd,
     });
@@ -95,10 +95,10 @@ export function SettingsPanel() {
 
   const connectGmail = async () => {
     if (!gmailAuthUrl) return;
-    await openUrl(gmailAuthUrl);
+    await openExternal(gmailAuthUrl);
     // Poll status after a delay to detect when auth completes
     setTimeout(() => {
-      fetch("http://127.0.0.1:8765/api/auth/gmail/status")
+      fetch(`${SERVER_ORIGIN}/api/auth/gmail/status`)
         .then((r) => r.json())
         .then((d) => {
           setGmailStatus(d.status as GmailStatus);
@@ -108,9 +108,9 @@ export function SettingsPanel() {
   };
 
   const disconnectGmail = async () => {
-    await fetch("http://127.0.0.1:8765/api/auth/gmail/disconnect", { method: "DELETE" });
+    await fetch(`${SERVER_ORIGIN}/api/auth/gmail/disconnect`, { method: "DELETE" });
     setGmailStatus("not_authenticated");
-    const r = await fetch("http://127.0.0.1:8765/api/auth/gmail/status");
+    const r = await fetch(`${SERVER_ORIGIN}/api/auth/gmail/status`);
     const d = await r.json();
     setGmailAuthUrl(d.auth_url ?? null);
   };
@@ -388,7 +388,7 @@ export function SettingsPanel() {
                                   <li>Allez sur console.cloud.google.com</li>
                                   <li>Créez un projet → Activez l'API Gmail</li>
                                   <li>Credentials → OAuth 2.0 → Application Bureau</li>
-                                  <li>Ajoutez localhost:8765 dans redirect URIs</li>
+                                  <li>Ajoutez {gmailRedirectUri()} dans redirect URIs</li>
                                   <li>Téléchargez credentials.json</li>
                                 </ol>
                               </div>

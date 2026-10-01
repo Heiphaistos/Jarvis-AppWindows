@@ -200,7 +200,7 @@ async def upload_gmail_credentials(file: UploadFile = File(...)) -> dict:
             raise ValueError("Format invalide")
     except Exception:
         raise HTTPException(status_code=400, detail="Fichier credentials.json invalide.")
-    _DATA_DIR.mkdir(exist_ok=True)
+    _DATA_DIR.mkdir(parents=True, exist_ok=True)
     _CREDS_FILE.write_bytes(content)
     auth_url = await asyncio.to_thread(_build_gmail_auth_url)
     return {"status": "credentials_saved", "auth_url": auth_url}
@@ -242,12 +242,19 @@ async def gmail_disconnect() -> dict:
 
 # ── OAuth helpers (sync, run in thread) ─────────────────────────────────────
 
+def _gmail_redirect_uri() -> str:
+    """Adresse de retour OAuth : l'adresse publique en version hébergée, sinon localhost."""
+    from utils.config import settings
+    base = settings.public_origin.rstrip("/") or f"http://localhost:{settings.port}"
+    return f"{base}/api/auth/gmail/callback"
+
+
 def _build_gmail_auth_url() -> str:
     from google_auth_oauthlib.flow import InstalledAppFlow  # type: ignore[import]
     flow = InstalledAppFlow.from_client_secrets_file(
         str(_CREDS_FILE),
         scopes=GMAIL_SCOPES,
-        redirect_uri="http://localhost:8765/api/auth/gmail/callback",
+        redirect_uri=_gmail_redirect_uri(),
     )
     auth_url, _ = flow.authorization_url(
         access_type="offline",
@@ -262,9 +269,9 @@ def _exchange_code_for_token(code: str) -> None:
     flow = InstalledAppFlow.from_client_secrets_file(
         str(_CREDS_FILE),
         scopes=GMAIL_SCOPES,
-        redirect_uri="http://localhost:8765/api/auth/gmail/callback",
+        redirect_uri=_gmail_redirect_uri(),
     )
     flow.fetch_token(code=code)
-    _DATA_DIR.mkdir(exist_ok=True)
+    _DATA_DIR.mkdir(parents=True, exist_ok=True)
     _TOKEN_FILE.write_text(flow.credentials.to_json())
     logger.info("Token Gmail sauvegardé")

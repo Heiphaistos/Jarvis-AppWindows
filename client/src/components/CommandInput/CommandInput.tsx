@@ -1,13 +1,15 @@
 import { useState, useRef, useCallback } from "react";
 import { Mic, MicOff, Send, Network, Square, Activity, CloudSun, Clock, Newspaper, Eye, AudioWaveform } from "lucide-react";
 import { useJarvisStore } from "../../stores/jarvisStore";
+import { serverMode } from "../../lib/session";
 
-const QUICK_ACTIONS = [
+// pc : action sur la machine de Monsieur, absente de la version hébergée (VPS).
+const QUICK_ACTIONS: { icon: typeof Newspaper; label: string; query: string; pc?: boolean }[] = [
   { icon: Newspaper, label: "Briefing", query: "Fais-moi le point" },
-  { icon: Activity, label: "Diagnostic", query: "Fais un diagnostic complet du système" },
+  { icon: Activity, label: "Diagnostic", query: "Fais un diagnostic complet du système", pc: true },
   { icon: CloudSun, label: "Météo", query: "Quelle est la météo à Paris ?" },
   { icon: Clock, label: "Heure", query: "Quelle heure est-il ?" },
-  { icon: Eye, label: "Vision", query: "Regarde mon écran et dis-moi ce que tu vois" },
+  { icon: Eye, label: "Vision", query: "Regarde mon écran et dis-moi ce que tu vois", pc: true },
 ];
 
 interface Props {
@@ -60,7 +62,7 @@ export function CommandInput({ sendText, toggleMic, toggleLive, isMicActive }: P
       ) : (
         isConnected && hasMessages && (
           <div className="suggestions">
-            {QUICK_ACTIONS.map(({ icon: Icon, label, query }) => (
+            {QUICK_ACTIONS.filter((a) => !(a.pc && serverMode() === "hosted")).map(({ icon: Icon, label, query }) => (
               <button key={label} onClick={() => sendQuery(query)}>
                 <Icon />{label}
               </button>

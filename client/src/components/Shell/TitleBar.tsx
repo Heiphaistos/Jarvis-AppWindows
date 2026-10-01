@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { isTauri } from "../../lib/platform";
+import { WebMenu } from "./WebMenu";
 import { LayoutDashboard, Maximize2, Columns2, MessageSquare, ArrowLeftRight } from "lucide-react";
 import { useJarvisStore } from "../../stores/jarvisStore";
 import type { LayoutName } from "../../stores/jarvisStore";
@@ -100,7 +102,7 @@ export function TitleBar() {
         )}
         <SettingsPanel />
         <span className="tb-sep" />
-        <WindowControls />
+        {isTauri ? <WindowControls /> : <WebMenu />}
       </div>
     </header>
   );

@@ -1,13 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useJarvisStore } from "../stores/jarvisStore";
+import { startMic, type MicCapture } from "../lib/mic";
 import type { ClientEvent } from "../types";
-
-interface AudioChunkPayload {
-  data: number[];
-  sampleRate: number;
-}
 
 /** Bip de confirmation « Hey Jarvis » — deux notes montantes, WebAudio pur. */
 function playWakeChime() {
@@ -39,7 +33,7 @@ export function useWakeWord(
   send: (e: ClientEvent) => void,
   onWake: () => Promise<void>,
 ) {
-  const unlistenRef = useRef<UnlistenFn | null>(null);
+  const micRef = useRef<MicCapture | null>(null);
   const standbyActiveRef = useRef(false);
 
   const wakeWordEnabled = useJarvisStore((s) => s.wakeWordEnabled);
@@ -53,13 +47,9 @@ export function useWakeWord(
   const stopStandby = useCallback(async () => {
     if (!standbyActiveRef.current) return;
     standbyActiveRef.current = false;
-    unlistenRef.current?.();
-    unlistenRef.current = null;
-    try {
-      await invoke("stop_mic");
-    } catch {
-      // déjà arrêté
-    }
+    const mic = micRef.current;
+    micRef.current = null;
+    await mic?.stop();
     send({ type: "wake_reset", payload: {} });
     if (useJarvisStore.getState().status === "standby") {
       useJarvisStore.getState().setStatus("idle");
@@ -70,21 +60,20 @@ export function useWakeWord(
     if (standbyActiveRef.current) return;
     standbyActiveRef.current = true;
     try {
-      unlistenRef.current = await listen<AudioChunkPayload>(
-        "jarvis_audio_chunk",
-        (event) => {
-          const { data, sampleRate } = event.payload;
-          send({ type: "wake_audio", payload: { data, sampleRate } });
-        },
-      );
-      await invoke("start_mic");
+      const mic = await startMic((data, sampleRate) => {
+        send({ type: "wake_audio", payload: { data, sampleRate } });
+      });
+      if (!standbyActiveRef.current) {
+        // Veille annulée pendant l'ouverture du micro.
+        await mic.stop();
+        return;
+      }
+      micRef.current = mic;
       useJarvisStore.getState().setStatus("standby");
       console.log("[JARVIS-WAKE] Mode veille actif — dites « Hey Jarvis »");
     } catch (e) {
       console.warn("[JARVIS-WAKE] Échec démarrage veille (retry dans 4 s):", e);
       standbyActiveRef.current = false;
-      unlistenRef.current?.();
-      unlistenRef.current = null;
     }
   }, [send]);
 

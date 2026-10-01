@@ -244,12 +244,22 @@ _MEDIA_KEYS = {
 }
 
 
+# Équivalents MPRIS (Linux) des touches multimédia.
+_PLAYERCTL = {"playpause": "play-pause", "nexttrack": "next", "prevtrack": "previous", "stop": "stop"}
+
+
 @tool
 def media_control(action: str) -> str:
     """Contrôle la lecture multimédia (Spotify, YouTube, VLC…) : play_pause, next, previous, stop, mute, volume_up, volume_down."""
     key = _MEDIA_KEYS.get(action.strip().lower())
     if not key:
         return f"Action inconnue. Possibles : {', '.join(sorted(set(_MEDIA_KEYS)))}"
+    from utils.platform import IS_LINUX, run as _run, which_first
+    if IS_LINUX and key in _PLAYERCTL and which_first("playerctl"):
+        # MPRIS : pilote Spotify, VLC, Firefox/Chrome (YouTube)… même sous Wayland.
+        r = _run(["playerctl", _PLAYERCTL[key]], timeout=5)
+        if r.returncode == 0:
+            return f"Commande multimédia « {action} » envoyée."
     try:
         import pyautogui  # type: ignore[import]
         pyautogui.press(key)
@@ -278,8 +288,8 @@ def _capture_screen() -> tuple[bytes, str]:
             f"$t.Save('{out}',[System.Drawing.Imaging.ImageFormat]::Jpeg);"
             "$g.Dispose();$h.Dispose();$b.Dispose();$t.Dispose()"
         )
-        subprocess.run(["powershell", "-NonInteractive", "-Command", ps],
-                       capture_output=True, timeout=20, creationflags=0x08000000)
+        from utils.platform import run as _run
+        _run(["powershell", "-NonInteractive", "-Command", ps], timeout=20)
         data = out.read_bytes()
         out.unlink(missing_ok=True)
         return data, "image/jpeg"

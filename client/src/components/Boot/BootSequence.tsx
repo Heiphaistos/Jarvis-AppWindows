@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useJarvisStore } from "../../stores/jarvisStore";
+import { linkLabel } from "../../lib/platform";
 
 interface BootLine {
   text: string;
@@ -95,7 +96,7 @@ export function BootSequence() {
     () => [
       { text: "STARK INDUSTRIES © UNIFIED OS — BOOT v4.0", status: () => "ok" },
       { text: "Initialisation du réacteur ARC…", status: () => "ok" },
-      { text: "Liaison neurale WebSocket :8765", status: () => (isConnected ? "ok" : "pending") },
+      { text: `Liaison neurale ${linkLabel()}`, status: () => (isConnected ? "ok" : "pending") },
       { text: `Cerveau cognitif — ${providerLabel}`, status: () => (llmAvailable ? "ok" : "warn") },
       { text: "Reconnaissance vocale Whisper", status: () => (sttAvailable ? "ok" : "warn") },
       { text: "Synthèse vocale Piper", status: () => "ok" },

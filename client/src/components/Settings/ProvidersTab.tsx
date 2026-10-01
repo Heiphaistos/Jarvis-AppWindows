@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CheckCircle, Cpu, KeyRound, Loader2, Zap } from "lucide-react";
 import { useJarvisStore } from "../../stores/jarvisStore";
 import type { BrainLevel, ProviderInfo, ProvidersStatus } from "../../types";
+import { apiUrl } from "../../lib/platform";
 
 const LEVELS: { id: BrainLevel; label: string; hint: string }[] = [
   { id: "instant", label: "INSTANTANÉ", hint: "salutations, ordres, reformulations" },
@@ -79,7 +80,7 @@ function AutoCard({ status, busy, onActivate, onHedging }: {
   );
 }
 
-const API = "http://127.0.0.1:8765/api/providers";
+const API = apiUrl("/providers");
 
 /** Onglet CERVEAU — sélection du provider LLM (local, Anthropic, ou n'importe
  *  quelle API OpenAI-compatible). Les clés API sont write-only : envoyées au

@@ -213,13 +213,89 @@ class Desktop:
             time.sleep(0.004)  # certaines applis perdent des caractères envoyés trop vite
 
 
-_desktop: Desktop | None = None
+# Codes virtuels Windows → noms de touches xdotool (X11).
+_XKEYS = {
+    0x11: "ctrl", 0x12: "alt", 0x10: "shift", 0x5B: "super", 0x0D: "Return", 0x09: "Tab",
+    0x1B: "Escape", 0x20: "space", 0x08: "BackSpace", 0x2E: "Delete", 0x2D: "Insert",
+    0x24: "Home", 0x23: "End", 0x21: "Prior", 0x22: "Next", 0x26: "Up", 0x28: "Down",
+    0x25: "Left", 0x27: "Right", 0x2C: "Print", 0x14: "Caps_Lock",
+    **{0x6F + i: f"F{i}" for i in range(1, 13)},
+}
 
 
-def get_desktop() -> Desktop:
+class X11Desktop:
+    """Même interface que Desktop, pour Linux : xdotool (clavier) + wmctrl (fenêtres).
+
+    Fonctionne sous X11 et avec les applications XWayland ; une session
+    Wayland pure n'autorise pas une application à piloter les autres."""
+
+    def __init__(self) -> None:
+        from utils.platform import IS_LINUX, which_first
+        self._xdotool = which_first("xdotool")
+        self._wmctrl = which_first("wmctrl")
+        self.available = bool(IS_LINUX and self._xdotool and self._wmctrl)
+
+    def _run(self, *args: str, timeout: float = 5) -> str:
+        from utils.platform import run
+        return run(list(args), timeout=timeout).stdout
+
+    def windows(self) -> list[Window]:
+        # wmctrl -l : « 0x03a00007  0 hôte  Titre » ; ordre d'empilement via xprop.
+        found: dict[str, Window] = {}
+        for line in self._run(self._wmctrl, "-l").splitlines():
+            parts = line.split(None, 3)
+            if len(parts) < 4 or parts[1] == "-1":  # -1 : bureau, panneaux
+                continue
+            title = parts[3].strip()
+            if title:
+                found[parts[0].lower()] = Window(parts[0], title)
+        try:
+            stack = self._run("xprop", "-root", "_NET_CLIENT_LIST_STACKING").split("#", 1)[1]
+            order = [f"0x{int(x.strip(), 16):08x}" for x in stack.split(",") if x.strip()]
+        except Exception:
+            order = []
+        ranked = [found[h] for h in reversed(order) if h in found]
+        return ranked + [w for w in found.values() if w not in ranked]
+
+    def activate(self, w: Window) -> bool:
+        self._run(self._wmctrl, "-i", "-a", str(w.handle))
+        time.sleep(0.15)
+        return True
+
+    def show(self, w: Window, command: int) -> None:
+        h = str(w.handle)
+        if command == 6:  # SW_MINIMIZE
+            self._run(self._xdotool, "windowminimize", h)
+        elif command == 3:  # SW_MAXIMIZE
+            self._run(self._wmctrl, "-i", "-r", h, "-b", "add,maximized_vert,maximized_horz")
+        else:  # SW_RESTORE
+            self._run(self._wmctrl, "-i", "-r", h, "-b", "remove,maximized_vert,maximized_horz")
+            self._run(self._wmctrl, "-i", "-a", h)
+
+    def close(self, w: Window) -> None:
+        # Fermeture « polie » (_NET_CLOSE_WINDOW) : l'application peut demander d'enregistrer.
+        self._run(self._wmctrl, "-i", "-c", str(w.handle))
+
+    def foreground_title(self) -> str:
+        return self._run(self._xdotool, "getactivewindow", "getwindowname").strip()
+
+    def hotkey(self, codes: list[int]) -> None:
+        names = [_XKEYS.get(c) or chr(c).lower() for c in codes]
+        self._run(self._xdotool, "key", "--clearmodifiers", "+".join(names))
+
+    def type_text(self, text: str) -> None:
+        # xdotool tape l'Unicode (accents, emoji) ; « -- » : le texte n'est jamais une option.
+        self._run(self._xdotool, "type", "--clearmodifiers", "--delay", "4", "--", text,
+                  timeout=30 + len(text) * 0.02)
+
+
+_desktop: Desktop | X11Desktop | None = None
+
+
+def get_desktop() -> Desktop | X11Desktop:
     global _desktop
     if _desktop is None:
-        _desktop = Desktop()
+        _desktop = Desktop() if Desktop.available else X11Desktop()
     return _desktop
 
 

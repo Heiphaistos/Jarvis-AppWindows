@@ -6,6 +6,7 @@ import re
 import urllib.request
 from pathlib import Path
 from utils.logger import get_logger
+from utils.platform import IS_WINDOWS, NO_WINDOW, run, which_first
 
 logger = get_logger("windows_tools")
 
@@ -14,7 +15,8 @@ _PS = ["powershell", "-NoProfile", "-NonInteractive", "-Command"]
 
 def _run_ps(command: str, timeout: int = 10) -> str:
     try:
-        r = subprocess.run(_PS + [command], capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run(_PS + [command], capture_output=True, text=True, timeout=timeout,
+                           creationflags=NO_WINDOW)
         return (r.stdout or r.stderr or "").strip()
     except subprocess.TimeoutExpired:
         return "Délai dépassé."
@@ -25,6 +27,15 @@ def _run_ps(command: str, timeout: int = 10) -> str:
 @tool
 def get_battery() -> str:
     """Retourne le niveau de batterie et l'état de charge."""
+    if not IS_WINDOWS:
+        import psutil
+        b = psutil.sensors_battery()
+        if b is None:
+            return "Aucune batterie détectée (appareil de bureau ou batterie non reconnue)."
+        state = "en charge" if b.power_plugged else "décharge"
+        if b.power_plugged and b.percent >= 99:
+            state = "chargement complet"
+        return f"Batterie: {round(b.percent)}% — {state}"
     out = _run_ps(
         "(Get-WmiObject -Class Win32_Battery | Select-Object -First 1 | "
         "Select-Object EstimatedChargeRemaining, BatteryStatus) | ConvertTo-Json"
@@ -50,11 +61,22 @@ def get_battery() -> str:
 def set_volume(level: int) -> str:
     """Règle le volume système entre 0 et 100."""
     level = max(0, min(100, int(level)))
+    if not IS_WINDOWS:
+        if which_first("wpctl"):
+            cmd = ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", f"{level}%"]
+        elif which_first("pactl"):
+            cmd = ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{level}%"]
+        elif which_first("amixer"):
+            cmd = ["amixer", "-q", "sset", "Master", f"{level}%"]
+        else:
+            return "Réglage du volume impossible : installez pipewire (wpctl), pulseaudio (pactl) ou alsa-utils."
+        r = run(cmd, timeout=5)
+        return f"Volume réglé à {level}%." if r.returncode == 0 else f"Erreur volume : {r.stderr[:120]}"
     # Utilise nircmd si disponible, sinon PowerShell WScript
     import shutil
     nircmd = shutil.which("nircmd")
     if nircmd:
-        subprocess.run([nircmd, "setsysvolume", str(int(level * 655.35))], capture_output=True)
+        run([nircmd, "setsysvolume", str(int(level * 655.35))])
         return f"Volume réglé à {level}%."
     # Fallback: touches virtuelles (approximatif)
     _run_ps(
@@ -70,6 +92,16 @@ def ping_host(host: str) -> str:
     """Ping un hôte et retourne la latence moyenne."""
     if not re.match(r'^[a-zA-Z0-9.\-_]+$', host) or len(host) > 253:
         return "Hôte invalide."
+    if not IS_WINDOWS:
+        # Liste d'arguments, pas de shell : l'hôte (déjà validé) ne peut rien injecter.
+        try:
+            r = run(["ping", "-c", "3", "-W", "2", "--", host], timeout=15)
+        except Exception as e:
+            return f"Ping impossible : {e}"
+        m = re.search(r"= [\d.]+/([\d.]+)/", r.stdout)
+        if r.returncode == 0 and m:
+            return f"Ping {host}: {round(float(m.group(1)))}ms (3 paquets)"
+        return f"Hôte {host} inaccessible."
     # L'hôte est passé via une variable PS affectée en premier (pas d'interpolation directe)
     # même si la regex valide déjà le format — défense en profondeur.
     safe_host = host.replace("'", "")  # double protection : supprime toute apostrophe résiduelle
@@ -152,7 +184,7 @@ def read_file(path: str) -> str:
     p = Path(path)
     raw = str(p) if p.is_absolute() else str(base / path)
 
-    allowed_roots = [base, Path("C:/Users"), Path("C:/tmp")]
+    allowed_roots = [base, Path("C:/Users"), Path("C:/tmp")] if IS_WINDOWS else [base]
     try:
         target = _validate_path(raw, allowed_roots)
     except PermissionError as e:

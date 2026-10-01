@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Brain, Trash2, Lightbulb, Loader2, MessagesSquare } from "lucide-react";
 import { useJarvisStore } from "../../stores/jarvisStore";
+import { SERVER_ORIGIN } from "../../lib/platform";
 
-const API = "http://127.0.0.1:8765/api";
+const API = `${SERVER_ORIGIN}/api`;
 
 interface Fact {
   key: string;

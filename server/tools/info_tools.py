@@ -160,17 +160,23 @@ def diagnose_system() -> str:
     except Exception:
         pass
 
-    # Dernières erreurs Windows Event Log
+    # Dernières erreurs du journal système (Windows : Event Log, Linux : journald)
     try:
-        r = subprocess.run(
-            ["powershell", "-NonInteractive", "-Command",
-             "Get-EventLog -LogName System -EntryType Error -Newest 3 -ErrorAction SilentlyContinue "
-             "| Select-Object -ExpandProperty Message "
-             "| ForEach-Object { $_.Substring(0, [Math]::Min(120, $_.Length)) }"],
-            capture_output=True, text=True, timeout=12, creationflags=0x08000000,
-        )
+        from utils.platform import IS_WINDOWS, run as _run
+        if IS_WINDOWS:
+            r = _run(
+                ["powershell", "-NonInteractive", "-Command",
+                 "Get-EventLog -LogName System -EntryType Error -Newest 3 -ErrorAction SilentlyContinue "
+                 "| Select-Object -ExpandProperty Message "
+                 "| ForEach-Object { $_.Substring(0, [Math]::Min(120, $_.Length)) }"],
+                timeout=12,
+            )
+            title = "Erreurs récentes Windows"
+        else:
+            r = _run(["journalctl", "-p", "err", "-n", "3", "--no-pager", "-o", "cat", "-b"], timeout=12)
+            title = "Erreurs récentes du système"
         if r.returncode == 0 and r.stdout.strip():
-            lines.append("Erreurs récentes Windows:\n  " + r.stdout.strip()[:400].replace("\n", "\n  "))
+            lines.append(f"{title}:\n  " + r.stdout.strip()[:400].replace("\n", "\n  "))
     except Exception:
         pass
 

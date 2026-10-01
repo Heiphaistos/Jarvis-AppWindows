@@ -10,9 +10,8 @@ logger = get_logger("persistent_memory")
 
 import sys as _sys
 def _resolve_db_path() -> Path:
-    if getattr(_sys, "frozen", False):
-        return Path(_sys.executable).parent / "data" / "jarvis_memory.db"
-    return Path(__file__).parent.parent / "data" / "jarvis_memory.db"
+    from utils.paths import data_dir
+    return data_dir() / "jarvis_memory.db"
 _DB_PATH = _resolve_db_path()
 _instance: "PersistentMemory | None" = None
 

@@ -123,10 +123,18 @@ class STTManager:
         audio = np.concatenate([np.array(c, dtype=np.float32) for c in chunks])
         target_rate = 16000
         if sample_rate != target_rate:
-            from math import gcd
-            from scipy.signal import resample_poly  # type: ignore[import]
-            g = gcd(target_rate, sample_rate)
-            audio = resample_poly(audio, target_rate // g, sample_rate // g).astype(np.float32)
+            try:
+                from math import gcd
+                from scipy.signal import resample_poly  # type: ignore[import]
+                g = gcd(target_rate, sample_rate)
+                audio = resample_poly(audio, target_rate // g, sample_rate // g).astype(np.float32)
+            except ImportError:
+                # Version web (sans scipy) : le navigateur envoie déjà du 16 kHz ;
+                # interpolation linéaire pour les autres cas.
+                n = int(len(audio) * target_rate / sample_rate)
+                audio = np.interp(
+                    np.linspace(0, len(audio) - 1, n), np.arange(len(audio)), audio
+                ).astype(np.float32)
         rms = float(np.sqrt(np.mean(audio ** 2))) if audio.size else 0.0
         if rms < RMS_THRESHOLD:
             logger.debug(f"Audio ignoré (silence) — RMS={rms:.4f}")

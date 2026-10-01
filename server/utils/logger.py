@@ -3,13 +3,10 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
-def _resolve_logs_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent / ".logs"
-    return Path(__file__).parents[2] / ".logs"
+from utils.paths import logs_dir as _logs_dir
 
-LOGS_DIR = _resolve_logs_dir()
-LOGS_DIR.mkdir(exist_ok=True)
+LOGS_DIR = _logs_dir()
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _build_handler() -> logging.FileHandler:

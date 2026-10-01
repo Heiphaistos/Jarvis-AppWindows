@@ -21,7 +21,10 @@ def _desktop():
     from core.desktop import get_desktop
     d = get_desktop()
     if not d.available:
-        raise RuntimeError("Le contrôle des fenêtres ne fonctionne que sous Windows.")
+        raise RuntimeError(
+            "Le contrôle des fenêtres demande Windows, ou sous Linux une session X11 "
+            "avec xdotool et wmctrl installés (sudo apt install xdotool wmctrl)."
+        )
     return d
 
 

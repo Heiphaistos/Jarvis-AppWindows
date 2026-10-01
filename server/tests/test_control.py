@@ -114,6 +114,35 @@ def test_hors_windows():
 
     dk.set_desktop(NoDesktop())
     try:
-        assert "que sous Windows" in ct.list_windows()
+        assert "demande Windows" in ct.list_windows()
     finally:
         dk.set_desktop(None)
+
+
+def test_x11_desktop_parses_wmctrl_and_drives_xdotool(monkeypatch):
+    """Linux : fenêtres via wmctrl (ordre d'empilement xprop), clavier via xdotool."""
+    calls: list[tuple] = []
+    outputs = {
+        "wmctrl -l": "0x03a00007  0 pc  Document - LibreOffice\n0x04200003  0 pc  Firefox\n0x01000001 -1 pc  Bureau\n",
+        "xprop -root _NET_CLIENT_LIST_STACKING": "_NET_CLIENT_LIST_STACKING(WINDOW): window id # 0x3a00007, 0x4200003\n",
+    }
+
+    def fake_run(self, *args, timeout=5):
+        calls.append(args)
+        key = " ".join(a.rsplit("/", 1)[-1] for a in args[:3]).strip()
+        for k, v in outputs.items():
+            if key.startswith(k):
+                return v
+        return ""
+
+    monkeypatch.setattr(dk.X11Desktop, "_run", fake_run)
+    d = dk.X11Desktop.__new__(dk.X11Desktop)
+    d._xdotool, d._wmctrl, d.available = "/usr/bin/xdotool", "/usr/bin/wmctrl", True
+    wins = d.windows()
+    assert [w.title for w in wins] == ["Firefox", "Document - LibreOffice"]  # le plus haut d'abord
+    d.hotkey(dk.parse_keys("ctrl+shift+s"))
+    assert calls[-1][1:] == ("key", "--clearmodifiers", "ctrl+shift+s")
+    d.type_text("Été ✓")
+    assert calls[-1][-2:] == ("--", "Été ✓")
+    d.show(wins[0], 3)
+    assert "add,maximized_vert,maximized_horz" in calls[-1]

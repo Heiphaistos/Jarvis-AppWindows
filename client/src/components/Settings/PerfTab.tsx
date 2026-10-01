@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Gauge, Loader2, Zap, Scale, Leaf, ShieldCheck } from "lucide-react";
 import { useJarvisStore } from "../../stores/jarvisStore";
+import { apiUrl } from "../../lib/platform";
 
-const API = "http://127.0.0.1:8765/api/performance";
+const API = apiUrl("/performance");
 
 interface PerfProfile {
   name: string;

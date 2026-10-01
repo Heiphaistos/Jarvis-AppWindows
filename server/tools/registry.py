@@ -21,6 +21,7 @@ class ToolRegistry:
 
     def __init__(self) -> None:
         self._tools: dict[str, object] = {}
+        self._disabled: dict[str, str] = {}  # nom → raison (outil retiré dans ce mode)
         self._discover()
 
     def _discover(self) -> None:
@@ -43,7 +44,21 @@ class ToolRegistry:
                     self._tools[fn.__name__] = fn
         logger.info(f"{len(self._tools)} outils découverts")
 
+    def disable(self, names: set[str] | frozenset[str], reason: str) -> int:
+        """Retire des outils (absents des schémas, refus explicite s'ils sont
+        appelés quand même). Retourne le nombre d'outils retirés."""
+        removed = 0
+        for name in names:
+            if self._tools.pop(name, None) is not None:
+                self._disabled[name] = reason
+                removed += 1
+        if removed:
+            logger.info(f"{removed} outils désactivés : {reason}")
+        return removed
+
     def execute(self, name: str, **kwargs) -> str:
+        if name in self._disabled:
+            return f"Outil {name} indisponible : {self._disabled[name]}"
         if name not in self._tools:
             return f"Outil inconnu: {name}. Disponibles: {', '.join(sorted(self._tools))}"
         try:
@@ -102,3 +117,19 @@ def tool_schema(fn) -> dict:
         "description": description,
         "parameters": {"type": "object", "properties": props, "required": required},
     }
+
+
+# Outils qui agissent sur la machine où tourne le serveur : sur un VPS, ce
+# serait le VPS (et non le PC de Monsieur) — retirés de la version hébergée.
+HOST_TOOLS = frozenset({
+    # fenêtres, clavier
+    "list_windows", "window_action", "type_text", "press_keys", "fill_form",
+    # fichiers et applications
+    "delete_temp_files", "create_file", "move_file", "list_directory", "read_file",
+    "open_application", "kill_application", "take_screenshot", "read_clipboard", "write_clipboard",
+    # état de la machine
+    "get_battery", "set_volume", "get_public_ip", "get_system_info", "diagnose_system",
+    "list_processes", "pc_diagnostic", "pc_health_report", "nitrite_start",
+    # écran, médias, images du disque
+    "media_control", "analyze_screen", "analyze_image",
+})

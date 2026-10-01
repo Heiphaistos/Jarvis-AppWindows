@@ -1,0 +1,13 @@
+# Version web hébergée (VPS, sans GPU) : cerveaux, voix et transcription dans
+# le cloud. Ni LLM local (llama-cpp, 4 Go), ni Whisper local, ni wake word.
+fastapi==0.136.3
+uvicorn[standard]==0.48.0
+websockets==16.0
+edge-tts==7.2.8
+psutil==7.2.2
+pydantic==2.13.4
+pydantic-settings==2.14.2
+numpy==2.4.6
+python-multipart==0.0.31
+aiofiles==25.1.0
+httpx==0.28.1
