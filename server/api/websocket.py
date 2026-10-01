@@ -1036,6 +1036,17 @@ async def websocket_handler(
                     else:
                         logger.warning(f"Voix introuvable: {voice_path}")
 
+            elif event_type == "preview_voice":
+                # Paramètres › Voix : fait entendre la voix choisie.
+                if tts.is_available:
+                    audio = await tts.synthesize(
+                        "Bonjour Monsieur. Voici ma voix : tous les systèmes sont opérationnels."
+                    )
+                    if audio:
+                        await manager.send(ws, "tts_audio", {"audio": audio})
+                    else:
+                        await manager.send(ws, "error", {"message": "Cette voix n'a rien produit : vérifiez la clé ou la connexion."})
+
             elif event_type == "clear_history":
                 _archive_conversation(providers, memory)
                 memory.clear()

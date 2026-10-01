@@ -511,15 +511,6 @@ code, pre, .font-mono { font-family: var(--font-mono); }
 .modal-tabs button:hover { color: var(--ink); background: rgba(255, 255, 255, 0.05); }
 .modal-tabs button[aria-selected="true"] { color: var(--bg); background: var(--accent); }
 .modal-body { padding: 20px 22px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
-/* Les anciens onglets utilisaient des tailles de 8 à 11 px, illisibles : remise à niveau. */
-.modal-body .text-\[8px\] { font-size: 11px; }
-.modal-body .text-\[9px\] { font-size: 11.5px; }
-.modal-body .text-\[10px\] { font-size: 12px; }
-.modal-body .text-\[11px\] { font-size: 13px; }
-.modal-body .text-xs { font-size: 12.5px; }
-/* Textes secondaires des anciens onglets : bleu à 25-40 % d'opacité, illisible. */
-.modal-body [class*="text-blue-400/"], .modal-body [class*="text-blue-300/"] { color: var(--ink-mute); }
-.modal-body [class*="text-cyan-100/"] { color: var(--ink); }
 
 /* ── Contrôles des paramètres ─────────────────────────────────────────────── */
 .set-section { display: grid; gap: 12px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
@@ -652,3 +643,16 @@ select.set-input option { background: #0b1118; color: #e6f6ff; }
 .gate-error { color: var(--red); font-size: 13px; }
 .set-textarea { display: grid; gap: 4px; }
 .set-textarea textarea { resize: vertical; min-height: 96px; height: auto; padding: 10px 12px; line-height: 1.5; font-family: inherit; }
+.set-voice-pick { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; text-align: left; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; }
+.set-voice-pick:hover strong { color: var(--accent); }
+
+/* Hors @layer : doit l'emporter sur les utilitaires Tailwind des anciens onglets. */
+/* Les anciens onglets utilisaient des tailles de 8 à 11 px, illisibles : remise à niveau. */
+.modal-body .text-\[8px\] { font-size: 11px; }
+.modal-body .text-\[9px\] { font-size: 11.5px; }
+.modal-body .text-\[10px\] { font-size: 12px; }
+.modal-body .text-\[11px\] { font-size: 13px; }
+.modal-body .text-xs { font-size: 12.5px; }
+/* Textes secondaires des anciens onglets : bleu à 25-40 % d'opacité, illisible. */
+.modal-body [class*="text-blue-400/"], .modal-body [class*="text-blue-300/"] { color: var(--ink-mute); }
+.modal-body [class*="text-cyan-100/"] { color: var(--ink); }

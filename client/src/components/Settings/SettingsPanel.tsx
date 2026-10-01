@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Settings, X, Volume2, VolumeX, Globe, Mail, CheckCircle, AlertCircle, Upload, Cpu, Ear, Gauge, Palette, Shield, Brain, Wrench } from "lucide-react";
+import { Settings, X, Volume2, Globe, Mail, CheckCircle, AlertCircle, Upload, Cpu, Ear, Gauge, Palette, Shield, Brain, Wrench, Play } from "lucide-react";
 import { SERVER_ORIGIN, gmailRedirectUri, openExternal } from "../../lib/platform";
 import { useJarvisStore } from "../../stores/jarvisStore";
 import { ProvidersTab } from "./ProvidersTab";
@@ -10,6 +10,7 @@ import { ThemeTab } from "./ThemeTab";
 import { MemoryTab } from "./MemoryTab";
 import { VoiceInputSection } from "./VoiceInputSection";
 import { EnginesTab } from "./EnginesTab";
+import { Row, Section, Toggle } from "./controls";
 
 interface VoiceOption {
   id: string;
@@ -179,41 +180,11 @@ export function SettingsPanel() {
                   {/* ── VOICE TAB ── */}
                   {activeTab === "voice" && (
                     <>
-                      {/* TTS Toggle */}
-                      <div className="flex flex-col gap-2">
-                        <div className="text-[9px] tracking-widest text-blue-400/40">SYNTHÈSE VOCALE</div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            {ttsEnabled
-                              ? <Volume2 size={14} className="text-cyan-400" />
-                              : <VolumeX size={14} className="text-blue-400/40" />
-                            }
-                            <span className="text-xs text-cyan-100/70">
-                              {ttsEnabled ? "Voix activée" : "Voix désactivée"}
-                            </span>
-                          </div>
-                          <button
-                            onClick={toggleTts}
-                            className="relative w-10 h-5 rounded-full transition-all"
-                            style={{
-                              background: ttsEnabled ? "rgb(var(--accent-rgb) / 0.3)" : "rgba(255,255,255,0.05)",
-                              border: `1px solid ${ttsEnabled ? "rgb(var(--accent-rgb) / 0.5)" : "rgba(255,255,255,0.1)"}`,
-                            }}
-                          >
-                            <motion.div
-                              animate={{ x: ttsEnabled ? 20 : 2 }}
-                              transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                              className="absolute top-0.5 w-4 h-4 rounded-full"
-                              style={{ background: ttsEnabled ? "var(--accent)" : "#ffffff22", boxShadow: ttsEnabled ? "0 0 8px var(--accent)" : "none" }}
-                            />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Voice selector */}
-                      <div className="flex flex-col gap-2">
-                        <div className="text-[9px] tracking-widest text-blue-400/40">VOIX FRANÇAISE</div>
-                        <div className="flex flex-col gap-1.5">
+                      <Section title="Voix de JARVIS">
+                        <Row label={ttsEnabled ? "Voix activée" : "Voix désactivée"} hint="JARVIS lit ses réponses à voix haute.">
+                          <Toggle label="Voix activée" checked={ttsEnabled} onChange={toggleTts} />
+                        </Row>
+                        <div className="set-providers">
                           {VOICE_OPTIONS.filter((v) =>
                             v.id.startsWith("edge:") ||
                             v.id.startsWith("gemini:") ||
@@ -222,101 +193,56 @@ export function SettingsPanel() {
                           ).map((voice) => {
                             const isSelected = selectedVoice === voice.id;
                             return (
-                              <button
-                                key={voice.id}
-                                onClick={() => applyVoice(voice.id)}
-                                className="flex items-start gap-3 p-2.5 rounded text-left transition-all"
-                                style={{
-                                  background: isSelected ? "rgb(var(--accent-rgb) / 0.1)" : "rgba(255,255,255,0.02)",
-                                  border: `1px solid ${isSelected ? "rgb(var(--accent-rgb) / 0.3)" : "rgba(255,255,255,0.05)"}`,
-                                }}
-                              >
-                                <div
-                                  className="mt-0.5 w-2 h-2 rounded-full flex-shrink-0"
-                                  style={{
-                                    background: isSelected ? "var(--accent)" : "transparent",
-                                    border: `1px solid ${isSelected ? "var(--accent)" : "rgba(255,255,255,0.2)"}`,
-                                    boxShadow: isSelected ? "0 0 6px var(--accent)" : "none",
-                                  }}
-                                />
-                                <div>
-                                  <div className="text-[11px] font-bold tracking-wider" style={{ color: isSelected ? "var(--accent)" : "#ffffff66" }}>
-                                    {voice.label}
-                                  </div>
-                                  <div className="text-[9px] text-blue-400/30 mt-0.5">{voice.description}</div>
+                              <div key={voice.id} className={`set-pcard${isSelected ? " is-active" : ""}`}>
+                                <div className="set-pcard-head">
+                                  <button type="button" className="set-voice-pick" aria-pressed={isSelected} onClick={() => applyVoice(voice.id)}>
+                                    <i className={isSelected ? "pdot ok" : "pdot"} />
+                                    <span className="set-provider-text">
+                                      <strong>{voice.label}</strong>
+                                      <small>{voice.description}</small>
+                                    </span>
+                                  </button>
+                                  {isSelected && <span className="set-status ok"><CheckCircle size={14} /> Choisie</span>}
+                                  <button
+                                    type="button"
+                                    className="btn btn-ghost btn-sm"
+                                    disabled={!wsSend}
+                                    title="Écouter cette voix"
+                                    onClick={() => {
+                                      applyVoice(voice.id);
+                                      wsSend?.({ type: "preview_voice", payload: {} });
+                                    }}
+                                  >
+                                    <Play />Écouter
+                                  </button>
                                 </div>
-                              </button>
+                              </div>
                             );
                           })}
                         </div>
-                      </div>
+                      </Section>
 
-                      {/* Effet armure façon film */}
-                      <div className="flex flex-col gap-2 pt-1 border-t border-cyan-900/20">
-                        <div className="text-[9px] tracking-widest text-blue-400/40">EFFET « ARMURE » (TIMBRE DU FILM)</div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Shield size={14} className={armorFx ? "text-cyan-400" : "text-blue-400/40"} />
-                            <span className="text-xs text-cyan-100/70">
-                              {armorFx ? "Résonance métallique active" : "Voix naturelle sans traitement"}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => setArmorFx(!armorFx)}
-                            className="relative w-10 h-5 rounded-full transition-all"
-                            style={{
-                              background: armorFx ? "rgb(var(--accent-rgb) / 0.3)" : "rgba(255,255,255,0.05)",
-                              border: `1px solid ${armorFx ? "rgb(var(--accent-rgb) / 0.5)" : "rgba(255,255,255,0.1)"}`,
-                            }}
-                          >
-                            <motion.div
-                              animate={{ x: armorFx ? 20 : 2 }}
-                              transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                              className="absolute top-0.5 w-4 h-4 rounded-full"
-                              style={{ background: armorFx ? "var(--accent)" : "#ffffff22", boxShadow: armorFx ? "0 0 8px var(--accent)" : "none" }}
-                            />
-                          </button>
-                        </div>
-                        <p className="text-[8px] text-blue-400/25 leading-relaxed">
-                          Reproduit le traitement haut-parleur de l'IA du film : résonances métalliques et bande passante resserrée, mixées sous la voix claire.
-                        </p>
-                      </div>
-
-                      {/* Wake word toggle */}
-                      <div className="flex flex-col gap-2 pt-1 border-t border-cyan-900/20">
-                        <div className="text-[9px] tracking-widest text-blue-400/40">WAKE WORD « HEY JARVIS »</div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Ear size={14} className={wakeWordEnabled ? "text-cyan-400" : "text-blue-400/40"} />
-                            <span className="text-xs text-cyan-100/70">
-                              {!wakeWordAvailable
-                                ? "Indisponible sur ce serveur"
-                                : wakeWordEnabled
-                                ? "Veille active — dites « Hey Jarvis »"
-                                : "Veille désactivée"}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => setWakeWordEnabled(!wakeWordEnabled)}
+                      <Section title="Effets et veille">
+                        <Row
+                          label={<><Shield size={14} /> Effet « armure »</>}
+                          hint="Timbre du film : résonances métalliques et bande passante resserrée, mixées sous la voix claire."
+                        >
+                          <Toggle label="Effet armure" checked={armorFx} onChange={setArmorFx} />
+                        </Row>
+                        <Row
+                          label={<><Ear size={14} /> Veille « Hey Jarvis »</>}
+                          hint={!wakeWordAvailable
+                            ? "Indisponible sur ce serveur (modèle de mot-clé absent)."
+                            : "L'audio de veille est analysé localement pour le mot-clé uniquement — jamais transcrit ni conservé."}
+                        >
+                          <Toggle
+                            label="Veille Hey Jarvis"
+                            checked={wakeWordEnabled}
                             disabled={!wakeWordAvailable}
-                            className="relative w-10 h-5 rounded-full transition-all disabled:opacity-30"
-                            style={{
-                              background: wakeWordEnabled ? "rgb(var(--accent-rgb) / 0.3)" : "rgba(255,255,255,0.05)",
-                              border: `1px solid ${wakeWordEnabled ? "rgb(var(--accent-rgb) / 0.5)" : "rgba(255,255,255,0.1)"}`,
-                            }}
-                          >
-                            <motion.div
-                              animate={{ x: wakeWordEnabled ? 20 : 2 }}
-                              transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                              className="absolute top-0.5 w-4 h-4 rounded-full"
-                              style={{ background: wakeWordEnabled ? "var(--accent)" : "#ffffff22", boxShadow: wakeWordEnabled ? "0 0 8px var(--accent)" : "none" }}
-                            />
-                          </button>
-                        </div>
-                        <p className="text-[8px] text-blue-400/25 leading-relaxed">
-                          L'audio de veille est analysé localement pour le mot-clé uniquement — jamais transcrit ni conservé.
-                        </p>
-                      </div>
+                            onChange={setWakeWordEnabled}
+                          />
+                        </Row>
+                      </Section>
 
                       {/* Micro et reconnaissance vocale */}
                       <VoiceInputSection />
