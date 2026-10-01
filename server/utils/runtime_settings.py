@@ -39,6 +39,7 @@ class Spec:
     choices: tuple[str, ...] = ()
     max_len: int = 300
     pattern: str = ""         # expression régulière que doit respecter une valeur non vide
+    multiline: bool = False   # texte libre sur plusieurs lignes (consignes)
 
     @property
     def default(self) -> Any:
@@ -72,6 +73,20 @@ SPECS: dict[str, Spec] = {
     "live.model": Spec(
         "str", lambda: os.environ.get("JARVIS_LIVE_MODEL", "gemini-2.5-flash-native-audio-preview-09-2025"),
         "Modèle Gemini du mode LIVE", max_len=120, pattern=_MODEL_RE),
+    "tts.gemini_style": Spec(
+        "str", lambda: os.environ.get(
+            "JARVIS_GEMINI_TTS_STYLE",
+            "Lis le texte suivant d'une voix grave, calme et posée, avec l'élégance flegmatique "
+            "d'un majordome britannique et une pointe d'ironie bienveillante : "),
+        "Consigne de ton pour la voix Gemini", max_len=500),
+    # ── Comportement de l'assistant ──
+    "assistant.instructions": Spec(
+        "str", "", "Consignes personnelles ajoutées à chaque conversation", max_len=2000,
+        multiline=True),
+    "assistant.response_length": Spec(
+        "choice", "normal", "Longueur maximale des réponses", choices=("short", "normal", "long")),
+    "chat.context_messages": Spec(
+        "int", 30, "Messages gardés en mémoire dans la conversation", 6, 100),
     # ── Mémoire ──
     "memory.auto": Spec("bool", lambda: _env_bool("JARVIS_AUTO_MEMORY", True), "Mémoire automatique"),
     # ── NiTriTe ──
@@ -102,12 +117,13 @@ def _coerce(key: str, spec: Spec, value: Any) -> Any:
             if spec.maximum is not None and num > spec.maximum:
                 raise SettingsError(f"{key} : maximum {spec.maximum}")
             return num
-        text = str(value).strip()
+        text = str(value).strip().replace("\r\n", "\n")
         if spec.kind == "choice":
             if text not in spec.choices:
                 raise SettingsError(f"{key} : valeur attendue parmi {', '.join(spec.choices)}")
             return text
-        if len(text) > spec.max_len or any(c in text for c in "\r\n\x00"):
+        forbidden = "\r\x00" if spec.multiline else "\r\n\x00"
+        if len(text) > spec.max_len or any(c in text for c in forbidden):
             raise SettingsError(f"{key} : valeur invalide")
         if text and spec.pattern and not re.match(spec.pattern, text):
             raise SettingsError(f"{key} : valeur non autorisée")

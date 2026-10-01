@@ -1,5 +1,5 @@
 import { serverMode } from "../../lib/session";
-import { Row, Section, Status, TextField, useRuntimeSettings } from "./controls";
+import { Row, Section, Select, Slider, Status, TextArea, TextField, useRuntimeSettings } from "./controls";
 
 const GEMINI_TTS_MODELS = ["gemini-2.5-flash-preview-tts", "gemini-2.5-pro-preview-tts"];
 const LIVE_MODELS = [
@@ -8,7 +8,13 @@ const LIVE_MODELS = [
   "gemini-2.0-flash-live-001",
 ];
 
-/** Onglet MOTEURS — modèles des voix Gemini, mode LIVE et intégration NiTriTe.
+const LENGTHS = [
+  { value: "short", label: "Courtes — l'essentiel, vite" },
+  { value: "normal", label: "Normales" },
+  { value: "long", label: "Longues — explications détaillées" },
+];
+
+/** Onglet MOTEURS — comportement de JARVIS, voix Gemini, mode LIVE et NiTriTe.
  *  Ces réglages n'existaient qu'en variables d'environnement. */
 export function EnginesTab() {
   const { values, update, error, saved } = useRuntimeSettings();
@@ -17,6 +23,42 @@ export function EnginesTab() {
 
   return (
     <>
+      <Section
+        title="Comportement de JARVIS"
+        hint="Les consignes s'appliquent dès le prochain message (en cerveau local : à la prochaine reconnexion)."
+      >
+        <div className="set-field">
+          <span className="set-label">Consignes personnelles</span>
+          <span className="set-hint">Comment JARVIS doit vous appeler, son ton, ce qu'il doit savoir de vous, ce qu'il doit éviter…</span>
+          <TextArea
+            label="Consignes personnelles"
+            maxLength={2000}
+            placeholder={"Exemples :\nAppelle-moi Tony.\nRéponds en tutoyant, avec humour.\nJe travaille sous Windows 11 et je code en Rust."}
+            value={String(values["assistant.instructions"])}
+            onCommit={(v) => void update({ "assistant.instructions": v })}
+          />
+        </div>
+        <Row label="Longueur des réponses" hint="Limite la taille des réponses des cerveaux cloud.">
+          <Select
+            label="Longueur des réponses"
+            value={String(values["assistant.response_length"])}
+            options={LENGTHS}
+            onChange={(v) => void update({ "assistant.response_length": v })}
+          />
+        </Row>
+        <Row label="Mémoire de la conversation" hint="Nombre de messages récents relus à chaque réponse. Plus = meilleur suivi, mais plus lent et plus coûteux.">
+          <Slider
+            label="Messages gardés en mémoire"
+            value={Number(values["chat.context_messages"])}
+            min={6}
+            max={100}
+            step={2}
+            format={(v) => `${v} messages`}
+            onCommit={(v) => void update({ "chat.context_messages": v })}
+          />
+        </Row>
+      </Section>
+
       <Section
         title="Voix Gemini"
         hint="Utilise la clé Gemini de l'onglet Cerveau. Choisissez une voix Gemini dans l'onglet Voix."
@@ -31,6 +73,13 @@ export function EnginesTab() {
           <datalist id="jarvis-tts-models">
             {GEMINI_TTS_MODELS.map((m) => <option key={m} value={m} />)}
           </datalist>
+        </Row>
+        <Row label="Ton de la voix" hint="Consigne lue par Gemini avant chaque phrase. Vide = voix neutre.">
+          <TextField
+            label="Consigne de ton pour la voix Gemini"
+            value={String(values["tts.gemini_style"])}
+            onCommit={(v) => void update({ "tts.gemini_style": v })}
+          />
         </Row>
       </Section>
 

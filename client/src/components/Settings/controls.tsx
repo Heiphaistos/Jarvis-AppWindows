@@ -183,6 +183,39 @@ export function TextField({ value, onCommit, placeholder, label, list, type = "t
   );
 }
 
+/** Zone de texte sur plusieurs lignes, enregistrée à la perte du focus. */
+export function TextArea({ value, onCommit, placeholder, label, maxLength, rows = 5 }: {
+  value: string;
+  onCommit: (v: string) => void;
+  placeholder?: string;
+  label: string;
+  maxLength?: number;
+  rows?: number;
+}) {
+  const [local, setLocal] = useState(value);
+  useEffect(() => setLocal(value), [value]);
+  // Enregistre aussi pendant la saisie : fermer les paramètres ne perd rien.
+  useEffect(() => {
+    if (local.trim() === value) return;
+    const t = window.setTimeout(() => onCommit(local.trim()), 900);
+    return () => window.clearTimeout(t);
+  }, [local, value, onCommit]);
+  return (
+    <div className="set-textarea">
+      <textarea
+        className="set-input"
+        rows={rows}
+        value={local}
+        placeholder={placeholder}
+        aria-label={label}
+        maxLength={maxLength}
+        onChange={(e) => setLocal(e.target.value)}
+      />
+      {maxLength && <small className="set-hint">{local.length} / {maxLength} · enregistré automatiquement</small>}
+    </div>
+  );
+}
+
 export function Status({ error, saved }: { error: string; saved: boolean }) {
   if (error) return <p className="set-status err" role="alert">{error}</p>;
   if (saved) return <p className="set-status ok" role="status">Enregistré</p>;

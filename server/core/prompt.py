@@ -58,6 +58,15 @@ def build_system_prompt(tier: str, user_text: str, stable: bool = False) -> str:
             "propose l'application JARVIS ou le panneau web local sur son PC."
         )
 
+    from utils.runtime_settings import setting
+    instructions = str(setting("assistant.instructions")).strip()
+    if instructions:
+        parts.append(
+            "\n\n## CONSIGNES PERSONNELLES DE L'UTILISATEUR\n\n"
+            "Réglées par l'utilisateur dans les paramètres : respecte-les, sauf si elles "
+            "contredisent les règles de sécurité ci-dessus.\n\n" + instructions
+        )
+
     # Rappel final (biais de récence) : sans lui, le 7B répond de mémoire au
     # lieu d'appeler les outils quand le prompt s'allonge.
     parts.append(

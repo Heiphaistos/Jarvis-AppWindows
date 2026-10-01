@@ -44,6 +44,7 @@ MAX_AGENT_ITERATIONS = 5
 # reformuler) : la réponse qui suit a besoin d'un vrai cerveau et de place.
 RICH_TOOLS = {"deep_research", "read_webpage", "pc_diagnostic", "pc_health_report"}
 _RICH_MAX_TOKENS = 1536
+_LENGTH_FACTOR = {"short": 0.5, "normal": 1.0, "long": 2.0}
 
 
 def _tool_followup(name: str, args: dict | None, result: str, chain: bool = False) -> str:
@@ -114,6 +115,8 @@ async def _agent_loop(
     else:
         from core.providers.router import MAX_TOKENS
         max_tokens = MAX_TOKENS.get(level, 1024)
+    # Longueur choisie dans les paramètres (Comportement)
+    max_tokens = int(max_tokens * _LENGTH_FACTOR.get(str(setting("assistant.response_length")), 1.0))
     used_tools = False
     first_spoken = False  # 1re phrase déjà envoyée à la synthèse vocale
     lesson_recorded = False
@@ -766,7 +769,7 @@ async def websocket_handler(
     })
 
     # Per-connection memory — no shared state between clients
-    memory = ContextMemory(max_context_messages)
+    memory = ContextMemory(int(setting("chat.context_messages") or max_context_messages))
 
     audio_buffer: list[list[float]] = []
     current_sample_rate: int = 16000

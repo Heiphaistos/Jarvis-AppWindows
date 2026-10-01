@@ -650,3 +650,5 @@ select.set-input option { background: #0b1118; color: #e6f6ff; }
 }
 .gate-form button:disabled { opacity: 0.5; cursor: default; }
 .gate-error { color: var(--red); font-size: 13px; }
+.set-textarea { display: grid; gap: 4px; }
+.set-textarea textarea { resize: vertical; min-height: 96px; height: auto; padding: 10px 12px; line-height: 1.5; font-family: inherit; }

@@ -57,13 +57,12 @@ def _gemini_tts_model() -> str:
     return str(setting("tts.gemini_model") or GEMINI_TTS_MODEL)
 GEMINI_TTS_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 GEMINI_VOICES = ("Charon", "Orus", "Iapetus", "Algenib", "Alnilam", "Rasalgethi", "Sadaltager", "Schedar")
-# Consigne de jeu : majordome IA, calme, posé, légèrement pince-sans-rire.
-# Vide = aucune consigne (JARVIS_GEMINI_TTS_STYLE="").
-GEMINI_TTS_STYLE = os.environ.get(
-    "JARVIS_GEMINI_TTS_STYLE",
-    "Lis le texte suivant d'une voix grave, calme et posée, avec l'élégance flegmatique "
-    "d'un majordome britannique et une pointe d'ironie bienveillante : ",
-)
+# Consigne de ton : réglage tts.gemini_style (Paramètres › Moteurs).
+
+
+def _gemini_tts_style() -> str:
+    from utils.runtime_settings import setting
+    return str(setting("tts.gemini_style"))
 
 
 def pcm_to_wav(pcm: bytes, rate: int = 24000, channels: int = 1, width: int = 2) -> bytes:
@@ -153,7 +152,7 @@ class TTSManager:
         if not key:
             raise RuntimeError("clé Gemini absente (onglet CERVEAU)")
         payload = {
-            "contents": [{"parts": [{"text": f"{GEMINI_TTS_STYLE}{text}"}]}],
+            "contents": [{"parts": [{"text": f"{_gemini_tts_style()}{text}"}]}],
             "generationConfig": {
                 "responseModalities": ["AUDIO"],
                 "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": self._gemini_voice}}},

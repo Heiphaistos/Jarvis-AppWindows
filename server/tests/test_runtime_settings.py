@@ -69,3 +69,21 @@ def test_moteur_local_coupe_le_cloud(monkeypatch):
                         lambda k: {"voice.cloud_stt": True, "voice.stt_engine": "openai",
                                    "voice.openai_stt_model": "gpt-4o-mini-transcribe"}.get(k, "x"))
     assert [e[0] for e in cloud_stt.engines(FakeProviders())] == ["openai"]
+
+
+def test_consignes_multilignes(tmp_path):
+    from utils.runtime_settings import RuntimeSettings, SettingsError
+    rs = RuntimeSettings(tmp_path / "settings.json")
+    rs.update({"assistant.instructions": "Appelle-moi Tony.\r\nRéponds court."})
+    assert rs.get("assistant.instructions") == "Appelle-moi Tony.\nRéponds court."
+    with pytest.raises(SettingsError):
+        rs.update({"tts.gemini_style": "ligne 1\nligne 2"})
+    with pytest.raises(SettingsError):
+        rs.update({"assistant.response_length": "infinie"})
+
+
+def test_consignes_dans_le_prompt(monkeypatch):
+    import utils.runtime_settings as rt
+    from core.prompt import build_system_prompt
+    monkeypatch.setattr(rt, "setting", lambda key: "Appelle-moi Tony." if key == "assistant.instructions" else rt.SPECS[key].default)
+    assert "Appelle-moi Tony." in build_system_prompt("cloud", "bonjour")
