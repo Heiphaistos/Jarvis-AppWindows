@@ -1,4 +1,4 @@
-J.A.R.V.I.S. v4.6.0 - Portable TOUT-EN-UN
+J.A.R.V.I.S. v5.3.0 - Portable TOUT-EN-UN
 =========================================
 
 Demarrage rapide :
@@ -19,9 +19,13 @@ Contenu :
 Configuration requise :
   - Windows 10/11 x64
   - GPU NVIDIA (CUDA) recommande pour le cerveau local — sans GPU,
-    configurez un cerveau cloud dans Reglages -> CERVEAU (Pollinations
+    configurez un cerveau cloud dans Parametres -> Cerveau (Pollinations
     fonctionne gratuitement sans cle)
   - ~6 GB d'espace disque apres telechargement du modele
+
+Apparence :
+  - 4 esthetiques (Holographique, Epure, Aurora, Tactique) et 4 dispositions
+    (HUD, Immersif, Duo, Compact) : barre de titre ou Parametres -> Apparence
 
 Voix :
   - En ligne : voix neurale Henri (naturelle) + effet armure
@@ -29,7 +33,7 @@ Voix :
 
 Protection materiel :
   - Demarrage en mode Economie, VRAM plafonnee a 80 %, retrogradation
-    automatique du profil si depassement (Reglages -> PERF)
+    automatique du profil si depassement (Parametres -> Performances)
 
 Depot et documentation :
   https://github.com/Heiphaistos/Jarvis-AppWindows

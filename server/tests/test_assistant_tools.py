@@ -24,7 +24,7 @@ def test_formats_de_rappel(store):
     assert "Rappel #2" in set_reminder("18:30", "appeler maman")
     assert "Rappel #3" in set_reminder("9h", "réunion")
     assert "non reconnu" in set_reminder("bientôt", "x")
-    due = store.pending()[0].due
+    due = next(r.due for r in store.pending() if r.message == "sortir le linge")
     assert 19 * 60 < due - time.time() <= 20 * 60
 
 

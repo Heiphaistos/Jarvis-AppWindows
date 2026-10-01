@@ -49,6 +49,11 @@ if skills_dir.exists():
     for f in skills_dir.glob("*.md"):
         added_datas.append((str(f), "skills"))
 
+# pkgutil.iter_modules (auto-découverte des outils, fournisseurs) ne voit rien
+# en mode frozen : embarquer tous les sous-modules des paquets du serveur.
+from PyInstaller.utils.hooks import collect_submodules
+local_modules = collect_submodules("tools") + collect_submodules("core") + collect_submodules("utils")
+
 a = Analysis(
     ["main.py"],
     pathex=[str(Path(".").resolve())],
@@ -89,15 +94,6 @@ a = Analysis(
         "openwakeword.model",
         "openwakeword.utils",
         "onnxruntime",
-        # pkgutil.iter_modules en mode frozen : déclarer explicitement les
-        # modules découverts dynamiquement (tools auto-discovery + providers)
-        "tools.calc_tools", "tools.email_tools", "tools.file_tools",
-        "tools.info_tools", "tools.memory_tools", "tools.system_tools",
-        "tools.web_tools", "tools.windows_tools", "tools.decorator",
-        "core.providers.base", "core.providers.local_llama",
-        "core.providers.anthropic_provider", "core.providers.openai_compat",
-        "core.providers.manager", "core.council", "core.intent",
-        "core.skills", "core.prompt", "core.wakeword", "utils.perf",
         "pyperclip",
         "PIL",
         "PIL.Image",
@@ -107,7 +103,7 @@ a = Analysis(
         "win32api",
         "win32con",
         "win32gui",
-    ],
+    ] + local_modules,
     hookspath=[],
     runtime_hooks=[],
     excludes=["tkinter", "matplotlib", "IPython", "jupyter"],
