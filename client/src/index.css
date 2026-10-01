@@ -351,6 +351,8 @@ code, pre, .font-mono { font-family: var(--font-mono); }
 .stage[data-layout="compact"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "chips" "chat"; }
 .stage[data-layout="compact"] .chat { width: min(900px, 100%); justify-self: center; }
 .stage[data-layout="compact"] .stat-chips { justify-self: center; }
+/* Immersif : la pastille d'état est centrée en haut — les puces restent dans la moitié gauche. */
+.stage[data-layout="immersive"] .stat-chips { position: relative; z-index: 2; justify-self: start; max-width: calc(50% - 110px); }
 
 .rail { grid-area: rail; }
 .core { grid-area: core; }
@@ -457,8 +459,8 @@ code, pre, .font-mono { font-family: var(--font-mono); }
 .welcome-card:not(:disabled):hover { color: #fff; border-color: var(--accent); background: rgb(var(--accent-rgb) / 0.12); translate: 0 -2px; }
 .welcome-card:disabled { opacity: 0.4; cursor: default; }
 
-.suggestions { display: flex; gap: 8px; overflow-x: auto; padding: 10px 16px 0; scrollbar-width: none; flex: none; }
-.suggestions::-webkit-scrollbar { display: none; }
+/* Retour à la ligne : le défilement horizontal à barre masquée cachait les derniers raccourcis. */
+.suggestions { display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 10px 16px 0; flex: none; }
 .suggestions button { flex: none; display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px; border-radius: var(--pill); border: 1px solid var(--line); background: rgb(var(--accent-rgb) / 0.05); font-size: 14px; color: var(--ink-soft); transition: all 0.2s; }
 .suggestions button svg { width: 14px; height: 14px; color: var(--accent); }
 .suggestions button:hover { color: #fff; border-color: var(--accent); background: rgb(var(--accent-rgb) / 0.14); }
@@ -487,7 +489,7 @@ code, pre, .font-mono { font-family: var(--font-mono); }
 .input-pill .icon-btn.on-green { color: var(--green); background: rgba(0, 255, 136, 0.14); }
 .chat-input .btn { height: 48px; }
 
-.agent-steps { display: flex; align-items: center; gap: 10px; margin: 10px 16px 0; padding: 7px 12px; border-radius: var(--radius-sm); overflow-x: auto; border: 1px solid var(--line-soft); background: rgb(var(--accent-rgb) / 0.04); flex: none; scrollbar-width: none; }
+.agent-steps { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 10px 16px 0; padding: 7px 12px; border-radius: var(--radius-sm); border: 1px solid var(--line-soft); background: rgb(var(--accent-rgb) / 0.04); flex: none; }
 .step { display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 11px; white-space: nowrap; color: var(--c); flex: none; }
 .step svg { width: 13px; height: 13px; }
 .step-sep { color: var(--ink-mute); }
@@ -515,6 +517,9 @@ code, pre, .font-mono { font-family: var(--font-mono); }
 .modal-body .text-\[10px\] { font-size: 12px; }
 .modal-body .text-\[11px\] { font-size: 13px; }
 .modal-body .text-xs { font-size: 12.5px; }
+/* Textes secondaires des anciens onglets : bleu à 25-40 % d'opacité, illisible. */
+.modal-body [class*="text-blue-400/"], .modal-body [class*="text-blue-300/"] { color: var(--ink-mute); }
+.modal-body [class*="text-cyan-100/"] { color: var(--ink); }
 
 /* ── Contrôles des paramètres ─────────────────────────────────────────────── */
 .set-section { display: grid; gap: 12px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
