@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Settings, X, Volume2, VolumeX, Mic, Globe, Mail, CheckCircle, AlertCircle, Upload, Cpu, Ear, Gauge, Palette, Shield, Brain } from "lucide-react";
+import { Settings, X, Volume2, VolumeX, Globe, Mail, CheckCircle, AlertCircle, Upload, Cpu, Ear, Gauge, Palette, Shield, Brain, Wrench } from "lucide-react";
 import { SERVER_ORIGIN, gmailRedirectUri, openExternal } from "../../lib/platform";
 import { useJarvisStore } from "../../stores/jarvisStore";
 import { ProvidersTab } from "./ProvidersTab";
 import { PerfTab } from "./PerfTab";
 import { ThemeTab } from "./ThemeTab";
 import { MemoryTab } from "./MemoryTab";
+import { VoiceInputSection } from "./VoiceInputSection";
+import { EnginesTab } from "./EnginesTab";
 
 interface VoiceOption {
   id: string;
@@ -29,7 +31,7 @@ type GmailStatus = "loading" | "non_configured" | "not_authenticated" | "connect
 
 export function SettingsPanel() {
   const [open, setOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"voice" | "brain" | "memory" | "perf" | "theme" | "services">("voice");
+  const [activeTab, setActiveTab] = useState<"voice" | "brain" | "engines" | "memory" | "perf" | "theme" | "services">("voice");
 
   const ttsEnabled = useJarvisStore((s) => s.ttsEnabled);
   const selectedVoice = useJarvisStore((s) => s.selectedVoice);
@@ -118,6 +120,7 @@ export function SettingsPanel() {
   const tabs = [
     { id: "voice" as const, label: "Voix", icon: <Volume2 /> },
     { id: "brain" as const, label: "Cerveau", icon: <Cpu /> },
+    { id: "engines" as const, label: "Moteurs", icon: <Wrench /> },
     { id: "memory" as const, label: "Mémoire", icon: <Brain /> },
     { id: "perf" as const, label: "Performances", icon: <Gauge /> },
     { id: "theme" as const, label: "Apparence", icon: <Palette /> },
@@ -315,19 +318,15 @@ export function SettingsPanel() {
                         </p>
                       </div>
 
-                      {/* Mic info */}
-                      <div className="flex flex-col gap-2 pt-1 border-t border-cyan-900/20">
-                        <div className="text-[9px] tracking-widest text-blue-400/40">MICROPHONE</div>
-                        <div className="flex items-center gap-2 text-[10px] text-blue-400/50">
-                          <Mic size={11} />
-                          <span>Cliquer sur le micro pour activer · Recliquer pour envoyer</span>
-                        </div>
-                      </div>
+                      {/* Micro et reconnaissance vocale */}
+                      <VoiceInputSection />
                     </>
                   )}
 
                   {/* ── BRAIN TAB ── */}
                   {activeTab === "brain" && <ProvidersTab />}
+
+                  {activeTab === "engines" && <EnginesTab />}
 
                   {/* ── PERF TAB ── */}
                   {activeTab === "memory" && <MemoryTab />}
