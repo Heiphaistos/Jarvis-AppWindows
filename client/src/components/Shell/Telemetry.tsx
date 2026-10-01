@@ -168,7 +168,7 @@ export function StatChips() {
       <span className="chip">RAM <b>{pct(m.ram)}</b></span>
       <span className="chip">GPU <b>{pct(m.gpu)}</b></span>
       <span className="chip">VRAM <b>{pct(m.vram)}</b></span>
-      <span className="chip max-w-[280px] overflow-hidden">CERVEAU <b className="truncate">{providerModel}</b></span>
+      <span className="chip max-w-[280px] overflow-hidden" title={providerModel}>CERVEAU <b className="truncate">{providerModel}</b></span>
     </div>
   );
 }
