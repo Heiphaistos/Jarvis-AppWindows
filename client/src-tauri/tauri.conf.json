@@ -14,7 +14,7 @@
     "windows": [
       {
         "title": "J.A.R.V.I.S.",
-        "additionalBrowserArgs": "--autoplay-policy=no-user-gesture-required --disable-features=msWebOOUI,msPdfOOUI",
+        "additionalBrowserArgs": "--autoplay-policy=no-user-gesture-required --disable-features=msWebOOUI,msPdfOOUI --allow-running-insecure-content",
         "width": 1100,
         "height": 720,
         "minWidth": 800,
@@ -22,8 +22,7 @@
         "resizable": true,
         "decorations": false,
         "transparent": true,
-        "center": true,
-        "additionalBrowserArgs": "--allow-running-insecure-content"
+        "center": true
       }
     ],
     "security": {
@@ -42,6 +41,9 @@
       "nsis": {
         "installMode": "currentUser"
       }
+    },
+    "resources": {
+      "resources/jarvis_server.exe": "jarvis_server.exe"
     }
   }
 }

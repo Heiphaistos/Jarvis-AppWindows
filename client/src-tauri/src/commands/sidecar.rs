@@ -8,24 +8,19 @@ use std::os::windows::process::CommandExt;
 
 pub struct SidecarState(pub Mutex<Option<Child>>);
 
-/// Serveur Python compilé (PyInstaller) — embarqué dans le binaire à la compilation
-static SERVER_EXE: &[u8] = include_bytes!("../../resources/jarvis_server.exe");
-
 /// True if something is already listening on 127.0.0.1:8765
 fn is_server_running() -> bool {
     TcpStream::connect("127.0.0.1:8765").is_ok()
 }
 
-/// Extrait jarvis_server.exe à côté de JARVIS.exe si absent ou différent.
-/// Retourne le chemin de l'exe extrait.
-fn extract_server_exe() -> Result<std::path::PathBuf, String> {
+/// Serveur Python compilé (PyInstaller), livré à côté de JARVIS.exe : ressource
+/// du bundle (installeur, remplacée à chaque mise à jour) ou fichier du zip portable.
+fn server_exe() -> Result<std::path::PathBuf, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let dir = exe.parent().ok_or("Impossible de trouver le dossier de JARVIS.exe")?;
     let server_path = dir.join("jarvis_server.exe");
-
     if !server_path.exists() {
-        std::fs::write(&server_path, SERVER_EXE)
-            .map_err(|e| format!("Extraction jarvis_server.exe échouée: {e}"))?;
+        return Err(format!("{} introuvable", server_path.display()));
     }
     Ok(server_path)
 }
@@ -47,7 +42,7 @@ pub fn launch_server(state: &SidecarState) -> Result<(), String> {
         return Ok(());
     }
 
-    let server_exe = extract_server_exe()?;
+    let server_exe = server_exe()?;
 
     let mut cmd = Command::new(&server_exe);
 

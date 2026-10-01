@@ -86,12 +86,23 @@ class STTManager:
                 size = p.name.replace("faster-whisper-", "") or "small"
                 logger.info(f"Modèle Whisper local absent — téléchargement de '{size}'...")
                 model_ref = size
-            self._model = WhisperModel(
-                model_ref,
-                device=self._settings.whisper_device,
-                compute_type=self._settings.whisper_compute_type,
-            )
-            logger.info(f"Whisper chargé: {model_ref}")
+            # float16 n'est pas disponible partout (CPU, build compilé sans
+            # CUDA pour CTranslate2) : retomber sur int8 plutôt que perdre le micro.
+            wanted = self._settings.whisper_compute_type
+            self._model = None
+            for compute in dict.fromkeys((wanted, "int8")):
+                try:
+                    self._model = WhisperModel(
+                        model_ref,
+                        device=self._settings.whisper_device,
+                        compute_type=compute,
+                    )
+                    break
+                except (ValueError, RuntimeError) as e:
+                    logger.warning(f"Whisper {compute} refusé ({e}) — essai suivant")
+            if self._model is None:
+                raise RuntimeError("aucun type de calcul Whisper accepté")
+            logger.info(f"Whisper chargé: {model_ref} ({compute})")
         except Exception as e:
             logger.warning(f"STT non disponible: {e}")
 

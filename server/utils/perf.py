@@ -33,8 +33,8 @@ PROFILES: dict[str, PerfProfile] = {
     ),
     "eco": PerfProfile(
         name="eco", label="Économie",
-        description="GPU partiel, contexte 2k, réponses brèves — libère VRAM/CPU pour vos jeux et apps.",
-        n_gpu_layers=16, n_ctx=2048, whisper_compute="int8", max_tokens=320,
+        description="GPU partiel, contexte 4k, réponses brèves — libère VRAM/CPU pour vos jeux et apps.",
+        n_gpu_layers=16, n_ctx=4096, whisper_compute="int8", max_tokens=320,
     ),
 }
 

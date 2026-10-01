@@ -2,7 +2,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 from utils.config import MODELS_DIR
@@ -36,8 +36,8 @@ class GmailStatusResponse(BaseModel):
 # ── Basic endpoints ─────────────────────────────────────────────────────────
 
 @router.get("/health", response_model=HealthResponse)
-async def health() -> HealthResponse:
-    return HealthResponse(status="ok", version="5.2.0")
+async def health(request: Request) -> HealthResponse:
+    return HealthResponse(status="ok", version=request.app.version)
 
 
 @router.get("/memories/count")
