@@ -58,6 +58,14 @@ def build_system_prompt(tier: str, user_text: str, stable: bool = False) -> str:
             "propose l'application JARVIS ou le panneau web local sur son PC."
         )
 
+    try:
+        from core.connections import connected_summary
+        accounts = connected_summary()
+        if accounts:
+            parts.append(accounts)
+    except Exception as e:
+        logger.warning(f"Comptes connectés indisponibles pour le prompt: {e}")
+
     from utils.runtime_settings import setting
     instructions = str(setting("assistant.instructions")).strip()
     if instructions:

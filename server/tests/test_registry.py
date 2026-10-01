@@ -19,7 +19,10 @@ EXPECTED_TOOLS = {
 
 def test_auto_discovery_51_outils():
     registry = ToolRegistry()
-    assert set(registry.list_tools()) == EXPECTED_TOOLS
+    # Les outils des comptes connectés (Paramètres › Comptes) sont vérifiés à part.
+    builtin = {n for n in registry.list_tools() if getattr(registry._tools[n], "_jarvis_connection", None) is None}
+    assert builtin == EXPECTED_TOOLS
+    assert {"mail_list", "mail_send", "github_overview", "calendar_events", "notify_phone"} <= set(registry.list_tools())
 
 
 def test_outil_inconnu():

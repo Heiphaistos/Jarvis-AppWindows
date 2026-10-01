@@ -56,6 +56,16 @@ class ToolRegistry:
             logger.info(f"{removed} outils désactivés : {reason}")
         return removed
 
+    @staticmethod
+    def _usable(fn) -> bool:
+        """Outils de comptes connectés : seulement si le compte est prêt (et les actions autorisées)."""
+        cid = getattr(fn, "_jarvis_connection", None)
+        if cid is None:
+            return True
+        from core.connections import get_store
+        store = get_store()
+        return store.allows_write(cid) if getattr(fn, "_jarvis_write", False) else store.is_configured(cid)
+
     def execute(self, name: str, **kwargs) -> str:
         if name in self._disabled:
             return f"Outil {name} indisponible : {self._disabled[name]}"
@@ -79,7 +89,7 @@ class ToolRegistry:
         Déduits de la signature (types, valeurs par défaut) et de la docstring :
         aucun schéma à maintenir à la main.
         """
-        return [tool_schema(fn) for _, fn in sorted(self._tools.items())]
+        return [tool_schema(fn) for _, fn in sorted(self._tools.items()) if self._usable(fn)]
 
 
 _JSON_TYPES = {str: "string", int: "integer", float: "number", bool: "boolean", list: "array", dict: "object"}

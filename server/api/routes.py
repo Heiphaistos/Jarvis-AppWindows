@@ -255,6 +255,47 @@ async def settings_update(req: SettingsUpdate) -> dict:
 
 # ── Gmail OAuth ─────────────────────────────────────────────────────────────
 
+# ── Comptes connectés ───────────────────────────────────────────────────────
+
+class ConnectionUpdate(BaseModel):
+    values: dict[str, str | None] = {}
+    allow_write: bool | None = None
+
+
+@router.get("/connections")
+async def connections_status() -> dict:
+    """Comptes connectables et leur état. Les secrets ne sont jamais renvoyés."""
+    from core.connections import get_store
+    return {"connections": get_store().status()}
+
+
+@router.post("/connections/{cid}")
+async def connections_update(cid: str, req: ConnectionUpdate) -> dict:
+    from core.connections import get_store
+    try:
+        get_store().update(cid, req.values, req.allow_write)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"connections": get_store().status()}
+
+
+@router.post("/connections/{cid}/test")
+async def connections_test(cid: str) -> dict:
+    import tools.connection_tools  # noqa: F401 — enregistre les fonctions de test
+    from core.connections import get_store, test_connection
+    result = await asyncio.to_thread(test_connection, cid)
+    return {**result, "connections": get_store().status()}
+
+
+@router.delete("/connections/{cid}")
+async def connections_remove(cid: str) -> dict:
+    from core.connections import CONNECTORS, get_store
+    if cid not in CONNECTORS:
+        raise HTTPException(status_code=404, detail="Compte inconnu")
+    get_store().remove(cid)
+    return {"connections": get_store().status()}
+
+
 @router.get("/auth/gmail/status", response_model=GmailStatusResponse)
 async def gmail_auth_status() -> GmailStatusResponse:
     status = gmail_status()
