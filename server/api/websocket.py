@@ -5,6 +5,7 @@ import re
 import uuid
 from fastapi import WebSocket, WebSocketDisconnect
 from utils.logger import get_logger
+from utils.runtime_settings import setting
 from utils.config import MODELS_DIR
 from core.llm import parse_tool_calls, _TOOL_CALL_RE
 from core.memory import ContextMemory
@@ -20,13 +21,11 @@ _rate_limiter = RateLimiter()
 
 logger = get_logger("websocket")
 
-# Fin de parole par détection de silence — plus de découpage arbitraire qui
-# coupait les phrases en morceaux toutes les ~2,7 s.
-SPEECH_RMS = 0.004          # au-dessus : de la parole est présente (voix faible ~0.009)
-SPEECH_CONFIRM_CHUNKS = 2   # 2 chunks consécutifs pour confirmer (anti-clic)
-SILENCE_CHUNKS_END = 14     # ~1.2 s de silence après parole → transcrire
-PRE_ROLL_CHUNKS = 7         # ~0.6 s gardées avant la parole — 1er mot jamais tronqué
-MAX_UTTERANCE_CHUNKS = 360  # ~30 s : borne dure anti-débordement
+# Fin de parole par détection de silence, mesurée en durée (et non en nombre
+# de morceaux : leur taille varie selon le micro et la fréquence d'échantillonnage).
+# Seuil, délai de silence et durée maximale se règlent dans Paramètres › Voix.
+SPEECH_CONFIRM_S = 0.15     # parole continue avant de la confirmer (anti-clic)
+PRE_ROLL_S = 0.6            # audio gardé avant la parole — 1er mot jamais tronqué
 MAX_PAYLOAD_BYTES = 2 * 1024 * 1024   # 2 MB — audio chunk upper bound
 MAX_TEXT_CHARS = 2000
 ALLOWED_ORIGINS = {
@@ -772,8 +771,9 @@ async def websocket_handler(
     audio_buffer: list[list[float]] = []
     current_sample_rate: int = 16000
     speech_detected: bool = False   # de la parole a été entendue dans le buffer
-    speech_run: int = 0             # chunks de parole consécutifs (confirmation)
-    silence_run: int = 0            # chunks de silence consécutifs
+    speech_run: float = 0.0         # secondes de parole consécutives (confirmation)
+    silence_run: float = 0.0        # secondes de silence consécutives
+    buffered_s: float = 0.0         # durée de l'audio en attente
     tts_enabled: bool = True
     wake_detector = None  # lazy — instancié au 1er wake_audio (modèle stateful par connexion)
     query_task: asyncio.Task | None = None  # requête en cours — annulable via stop_generation
@@ -818,6 +818,7 @@ async def websocket_handler(
             system=build_system_prompt("cloud", ""),
             tools=tools.schemas(),
             voice=voice if voice in GEMINI_VOICES else "Charon",
+            model=setting("live.model"),
         )
         try:
             await live.start()
@@ -911,8 +912,10 @@ async def websocket_handler(
                     chunk_data = payload.get("data")
                     if not isinstance(chunk_data, list):
                         continue
+                    current_sample_rate = int(payload.get("sampleRate", 16000)) or 16000
+                    chunk_s = len(chunk_data) / current_sample_rate
                     audio_buffer.append(chunk_data)
-                    current_sample_rate = int(payload.get("sampleRate", 16000))
+                    buffered_s += chunk_s
                     if len(audio_buffer) == 1:
                         await manager.send(ws, "status", {"status": "listening"})
 
@@ -921,30 +924,31 @@ async def websocket_handler(
                     for _v in chunk_data:
                         _sq += _v * _v
                     _rms = (_sq / max(len(chunk_data), 1)) ** 0.5
-                    if _rms >= SPEECH_RMS:
-                        speech_run += 1
-                        silence_run = 0
-                        if speech_run >= SPEECH_CONFIRM_CHUNKS:
+                    if _rms >= setting("voice.speech_threshold"):
+                        speech_run += chunk_s
+                        silence_run = 0.0
+                        if speech_run >= SPEECH_CONFIRM_S:
                             speech_detected = True
                     else:
-                        speech_run = 0
-                        silence_run += 1
+                        speech_run = 0.0
+                        silence_run += chunk_s
 
                     if not speech_detected:
                         # Pas encore de parole : ne garder qu'un court pré-roll —
                         # jamais des secondes de silence envoyées à Whisper.
-                        if len(audio_buffer) > PRE_ROLL_CHUNKS:
-                            audio_buffer.pop(0)
+                        while len(audio_buffer) > 1 and buffered_s - len(audio_buffer[0]) / current_sample_rate >= PRE_ROLL_S:
+                            buffered_s -= len(audio_buffer.pop(0)) / current_sample_rate
                         continue
 
-                    end_of_speech = silence_run >= SILENCE_CHUNKS_END
-                    overflow = len(audio_buffer) >= MAX_UTTERANCE_CHUNKS
+                    end_of_speech = silence_run * 1000 >= setting("voice.end_silence_ms")
+                    overflow = buffered_s >= setting("voice.max_utterance_s")
                     if end_of_speech or overflow:
                         chunks = list(audio_buffer)
                         audio_buffer.clear()
+                        buffered_s = 0.0
                         speech_detected = False
-                        speech_run = 0
-                        silence_run = 0
+                        speech_run = 0.0
+                        silence_run = 0.0
                         if query_task is not None and not query_task.done():
                             query_task.cancel()
                         query_task = asyncio.create_task(_run_query(transcribe_and_query(
@@ -978,16 +982,18 @@ async def websocket_handler(
                 if not speech_detected:
                     # Que du silence dans le buffer — rien à transcrire
                     audio_buffer.clear()
-                    speech_run = 0
-                    silence_run = 0
+                    buffered_s = 0.0
+                    speech_run = 0.0
+                    silence_run = 0.0
                     await manager.send(ws, "status", {"status": "idle"})
                     continue
                 speech_detected = False
-                speech_run = 0
-                silence_run = 0
+                speech_run = 0.0
+                silence_run = 0.0
                 if audio_buffer and voice_available(stt, providers):
                     chunks = list(audio_buffer)
                     audio_buffer.clear()
+                    buffered_s = 0.0
                     if query_task is not None and not query_task.done():
                         query_task.cancel()
                     query_task = asyncio.create_task(_run_query(transcribe_and_query(

@@ -38,6 +38,11 @@ LOGPROB_THRESHOLD = -1.0        # en dessous : Whisper devine
 COMPRESSION_RATIO_MAX = 2.4     # au-dessus : texte en boucle (« oui oui oui oui… »)
 UNCERTAIN_LOGPROB = -0.6        # entre les deux : transcription gardée mais « incertaine »
 
+def _stt_language() -> str:
+    from utils.runtime_settings import setting
+    return str(setting("voice.stt_language") or "fr")
+
+
 _INITIAL_PROMPT = (
     "Commandes vocales en français adressées à JARVIS, assistant personnel de Monsieur : "
     "questions, météo, heure, calculs, rappels, fenêtres, NiTriTe, Discord, Spotify, Chrome."
@@ -151,7 +156,7 @@ class STTManager:
         def _run() -> tuple[str, bool]:
             segments, _info = self._model.transcribe(  # type: ignore[union-attr]
                 audio,
-                language="fr",
+                language=_stt_language(),
                 beam_size=5,
                 best_of=1,
                 vad_filter=True,

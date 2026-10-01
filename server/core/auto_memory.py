@@ -92,8 +92,10 @@ class Learned:
 # ── Réglage ──────────────────────────────────────────────────────────────────
 
 def is_enabled() -> bool:
-    """Actif par défaut ; coupé par JARVIS_AUTO_MEMORY=0 ou par le réglage HUD."""
-    if os.environ.get("JARVIS_AUTO_MEMORY", "1").strip() in ("0", "false", "off", "non"):
+    """Actif par défaut ; coupé par le réglage « memory.auto » (JARVIS_AUTO_MEMORY=0
+    par défaut sur un serveur) ou par l'interrupteur de l'onglet Mémoire."""
+    from utils.runtime_settings import setting
+    if not setting("memory.auto"):
         return False
     try:
         from core.persistent_memory import get_memory

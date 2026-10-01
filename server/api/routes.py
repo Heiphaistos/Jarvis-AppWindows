@@ -177,6 +177,53 @@ async def providers_configure(req: ProviderConfigRequest) -> dict:
             raise HTTPException(status_code=400, detail=error)
     return pm.status()
 
+@router.get("/providers/{name}/models")
+async def providers_models(name: str) -> dict:
+    """Modèles proposés par un fournisseur, avec la clé enregistrée côté serveur."""
+    import httpx
+    from core.providers import get_provider_manager
+    from core.providers.discovery import list_models
+    try:
+        return {"models": await list_models(get_provider_manager(), name)}
+    except (ValueError, httpx.HTTPError) as e:
+        raise HTTPException(status_code=400, detail=str(e) or "Fournisseur injoignable")
+
+
+@router.post("/providers/{name}/test")
+async def providers_test(name: str) -> dict:
+    """Teste la connexion à un fournisseur (clé, adresse, modèle)."""
+    from core.providers import get_provider_manager
+    from core.providers.discovery import test_connection
+    try:
+        return await test_connection(get_provider_manager(), name)
+    except ValueError as e:
+        return {"ok": False, "detail": str(e)}
+
+
+# ── Réglages (Paramètres › Voix, Moteurs) ───────────────────────────────────
+
+class SettingsUpdate(BaseModel):
+    values: dict[str, bool | int | float | str]
+
+
+@router.get("/settings")
+async def settings_get() -> dict:
+    from utils.runtime_settings import get_settings
+    rs = get_settings()
+    return {"values": rs.snapshot(), "schema": rs.schema()}
+
+
+@router.post("/settings")
+async def settings_update(req: SettingsUpdate) -> dict:
+    from utils.runtime_settings import SettingsError, get_settings
+    rs = get_settings()
+    try:
+        values = rs.update(req.values)
+    except SettingsError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"values": values, "schema": rs.schema()}
+
+
 # ── Gmail OAuth ─────────────────────────────────────────────────────────────
 
 @router.get("/auth/gmail/status", response_model=GmailStatusResponse)

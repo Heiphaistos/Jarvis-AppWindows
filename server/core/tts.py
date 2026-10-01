@@ -50,6 +50,11 @@ def _male_speaker_id(voice_path: Path) -> int | None:
 # Gemini TTS : voix neurales expressives, pilotables par une consigne de ton.
 # Voix masculines graves adaptées à JARVIS : Charon, Orus, Iapetus, Algenib…
 GEMINI_TTS_MODEL = os.environ.get("JARVIS_GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
+
+
+def _gemini_tts_model() -> str:
+    from utils.runtime_settings import setting
+    return str(setting("tts.gemini_model") or GEMINI_TTS_MODEL)
 GEMINI_TTS_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 GEMINI_VOICES = ("Charon", "Orus", "Iapetus", "Algenib", "Alnilam", "Rasalgethi", "Sadaltager", "Schedar")
 # Consigne de jeu : majordome IA, calme, posé, légèrement pince-sans-rire.
@@ -156,7 +161,7 @@ class TTSManager:
         }
         from core.providers.http import shared_client
         resp = await shared_client().post(
-            GEMINI_TTS_URL.format(model=GEMINI_TTS_MODEL), json=payload,
+            GEMINI_TTS_URL.format(model=_gemini_tts_model()), json=payload,
             headers={"x-goog-api-key": key, "Content-Type": "application/json"},
             timeout=httpx.Timeout(15.0, connect=5.0),
         )
