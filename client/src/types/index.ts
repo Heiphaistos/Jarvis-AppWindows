@@ -84,6 +84,7 @@ export type ServerEvent =
   | { type: "token"; payload: { token: string; messageId: string } }
   | { type: "message_done"; payload: { messageId: string } }
   | { type: "tts_audio"; payload: { audio: string } }
+  | { type: "greeting"; payload: { text: string } }
   | { type: "tts_chunk"; payload: { audio: string; final: boolean; index: number } }
   | { type: "stt_text"; payload: { text: string; uncertain?: boolean } }
   | { type: "tool_result"; payload: { tool: string; result: string } }

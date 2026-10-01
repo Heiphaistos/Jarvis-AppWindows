@@ -83,6 +83,10 @@ SPECS: dict[str, Spec] = {
     "assistant.instructions": Spec(
         "str", "", "Consignes personnelles ajoutées à chaque conversation", max_len=2000,
         multiline=True),
+    "assistant.greeting": Spec("bool", True, "Accueil vocal à l'ouverture de l'application"),
+    "assistant.greeting_briefing": Spec("bool", True, "Annoncer mails non lus et prochain rendez-vous à l'accueil"),
+    "assistant.user_title": Spec("str", "Monsieur", "Comment JARVIS vous appelle", max_len=40,
+                                 pattern=r"^[\w' .-]{1,40}$"),
     "assistant.response_length": Spec(
         "choice", "normal", "Longueur maximale des réponses", choices=("short", "normal", "long")),
     "chat.context_messages": Spec(

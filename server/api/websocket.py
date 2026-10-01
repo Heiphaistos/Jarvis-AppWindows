@@ -770,6 +770,7 @@ async def websocket_handler(
 
     # Per-connection memory — no shared state between clients
     memory = ContextMemory(int(setting("chat.context_messages") or max_context_messages))
+    greeted = False
 
     audio_buffer: list[list[float]] = []
     current_sample_rate: int = 16000
@@ -1035,6 +1036,21 @@ async def websocket_handler(
                         tts.set_voice(voice_path)
                     else:
                         logger.warning(f"Voix introuvable: {voice_path}")
+
+            elif event_type == "greet":
+                # Ouverture de l'application : accueil parlé, une fois par connexion.
+                if not greeted and setting("assistant.greeting"):
+                    greeted = True
+                    from core.greeting import build_greeting
+                    text = await asyncio.to_thread(
+                        build_greeting, None, bool(setting("assistant.greeting_briefing")),
+                        str(setting("assistant.user_title")))
+                    memory.add_assistant(text)
+                    await manager.send(ws, "greeting", {"text": text})
+                    if tts_enabled and tts.is_available:
+                        audio = await tts.synthesize(text)
+                        if audio:
+                            await manager.send(ws, "tts_audio", {"audio": audio})
 
             elif event_type == "preview_voice":
                 # Paramètres › Voix : fait entendre la voix choisie.

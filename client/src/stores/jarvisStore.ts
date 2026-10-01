@@ -569,6 +569,15 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
         });
         break;
 
+      case "greeting":
+        addMessage({
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: event.payload.text,
+          timestamp: Date.now(),
+        });
+        break;
+
       case "tts_audio":
         if (get().ttsEnabled) {
           playTtsAudio(event.payload.audio, () => {

@@ -1,5 +1,5 @@
 import { serverMode } from "../../lib/session";
-import { Row, Section, Select, Slider, Status, TextArea, TextField, useRuntimeSettings } from "./controls";
+import { Row, Section, Select, Slider, Status, TextArea, TextField, Toggle, useRuntimeSettings } from "./controls";
 
 const GEMINI_TTS_MODELS = ["gemini-2.5-flash-preview-tts", "gemini-2.5-pro-preview-tts"];
 const LIVE_MODELS = [
@@ -27,6 +27,28 @@ export function EnginesTab() {
         title="Comportement de JARVIS"
         hint="Les consignes s'appliquent dès le prochain message (en cerveau local : à la prochaine reconnexion)."
       >
+        <Row label="Comment JARVIS vous appelle" hint="« Monsieur », « Madame », « Tony », « Patron »…">
+          <TextField
+            label="Comment JARVIS vous appelle"
+            value={String(values["assistant.user_title"])}
+            onCommit={(v) => void update({ "assistant.user_title": v || "Monsieur" })}
+          />
+        </Row>
+        <Row label="Accueil vocal au démarrage" hint="JARVIS vous salue à voix haute à l'ouverture : heure, état des systèmes.">
+          <Toggle
+            label="Accueil vocal au démarrage"
+            checked={Boolean(values["assistant.greeting"])}
+            onChange={(v) => void update({ "assistant.greeting": v })}
+          />
+        </Row>
+        <Row label="Point rapide à l'accueil" hint="Ajoute les mails non lus et le prochain rendez-vous (onglet Comptes).">
+          <Toggle
+            label="Point rapide à l'accueil"
+            checked={Boolean(values["assistant.greeting_briefing"])}
+            disabled={!values["assistant.greeting"]}
+            onChange={(v) => void update({ "assistant.greeting_briefing": v })}
+          />
+        </Row>
         <div className="set-field">
           <span className="set-label">Consignes personnelles</span>
           <span className="set-hint">Comment JARVIS doit vous appeler, son ton, ce qu'il doit savoir de vous, ce qu'il doit éviter…</span>

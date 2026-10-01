@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Download, Trash2 } from "lucide-react";
 import { ChatPanel } from "./components/ChatPanel/ChatPanel";
 import { CommandInput } from "./components/CommandInput/CommandInput";
@@ -47,6 +47,17 @@ export default function App() {
   const layout = useJarvisStore((s) => s.layout);
   const side = useJarvisStore((s) => s.layoutSide);
   const onMic = () => void jarvis.toggleMic();
+
+  // Accueil parlé « Bonjour Monsieur » dès l'ouverture, une fois l'initialisation terminée.
+  const bootDone = useJarvisStore((s) => s.bootDone);
+  const isConnected = useJarvisStore((s) => s.isConnected);
+  const wsSend = useJarvisStore((s) => s.wsSend);
+  const greeted = useRef(false);
+  useEffect(() => {
+    if (greeted.current || !bootDone || !isConnected || !wsSend) return;
+    greeted.current = true;
+    wsSend({ type: "greet", payload: {} });
+  }, [bootDone, isConnected, wsSend]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {

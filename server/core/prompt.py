@@ -67,6 +67,9 @@ def build_system_prompt(tier: str, user_text: str, stable: bool = False) -> str:
         logger.warning(f"Comptes connectés indisponibles pour le prompt: {e}")
 
     from utils.runtime_settings import setting
+    title = str(setting("assistant.user_title")).strip()
+    if title and title != "Monsieur":
+        parts.append(f"\n\n## APPELLATION\n\nAppelle l'utilisateur « {title} » (et non « Monsieur »).")
     instructions = str(setting("assistant.instructions")).strip()
     if instructions:
         parts.append(
