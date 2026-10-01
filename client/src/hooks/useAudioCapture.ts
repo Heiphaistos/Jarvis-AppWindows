@@ -1,6 +1,6 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect } from "react";
 import { useJarvisStore } from "../stores/jarvisStore";
-import { startMic, type MicCapture } from "../lib/mic";
+import { onMicError, startMic, type MicCapture } from "../lib/mic";
 import { isTauri } from "../lib/platform";
 import type { ClientEvent } from "../types";
 
@@ -37,7 +37,7 @@ export function useAudioCapture(send: (e: ClientEvent) => void) {
                 id: crypto.randomUUID(),
                 role: "system",
                 content: isTauri
-                  ? "⚠ Microphone silencieux — aucun son détecté. Vérifie que le bon micro est sélectionné dans le système."
+                  ? "⚠ Microphone silencieux — aucun son détecté. Choisis le bon micro dans Paramètres › Voix."
                   : "⚠ Microphone silencieux — aucun son détecté. Vérifie le micro autorisé pour ce site (icône à gauche de l'adresse).",
                 timestamp: Date.now(),
               });
@@ -61,6 +61,25 @@ export function useAudioCapture(send: (e: ClientEvent) => void) {
       throw err;
     }
   }, [send]);
+
+  // Flux coupé en cours de route (micro débranché, repris par une autre appli) :
+  // on le dit, et on remet le bouton micro dans son état réel.
+  useEffect(() => onMicError((message) => {
+    if (!activeRef.current) return;
+    activeRef.current = false;
+    const mic = micRef.current;
+    micRef.current = null;
+    void mic?.stop();
+    send({ type: "mic_stop", payload: {} });
+    const st = useJarvisStore.getState();
+    st.setMicActive(false);
+    st.addMessage({
+      id: crypto.randomUUID(),
+      role: "system",
+      content: `⚠ Micro interrompu : ${message}. Vérifie le micro choisi dans Paramètres › Voix.`,
+      timestamp: Date.now(),
+    });
+  }), [send]);
 
   const stopCapture = useCallback(async () => {
     activeRef.current = false;

@@ -27,6 +27,7 @@ pub fn run() {
             stop_server,
             commands::audio::start_mic,
             commands::audio::stop_mic,
+            commands::audio::list_mics,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
