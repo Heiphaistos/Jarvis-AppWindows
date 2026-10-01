@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Settings, X, Volume2, Globe, Mail, CheckCircle, AlertCircle, Upload, Cpu, Ear, Gauge, Palette, Shield, Brain, Wrench, Play } from "lucide-react";
+import { Settings, X, Volume2, Globe, Mail, CheckCircle, AlertCircle, Upload, Cpu, Ear, Gauge, Palette, Shield, Brain, Wrench, Play, Link2 } from "lucide-react";
 import { SERVER_ORIGIN, gmailRedirectUri, openExternal } from "../../lib/platform";
 import { useJarvisStore } from "../../stores/jarvisStore";
 import { ProvidersTab } from "./ProvidersTab";
@@ -10,6 +10,7 @@ import { ThemeTab } from "./ThemeTab";
 import { MemoryTab } from "./MemoryTab";
 import { VoiceInputSection } from "./VoiceInputSection";
 import { EnginesTab } from "./EnginesTab";
+import { AccountsTab } from "./AccountsTab";
 import { Row, Section, Toggle } from "./controls";
 
 interface VoiceOption {
@@ -32,7 +33,7 @@ type GmailStatus = "loading" | "non_configured" | "not_authenticated" | "connect
 
 export function SettingsPanel() {
   const [open, setOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"voice" | "brain" | "engines" | "memory" | "perf" | "theme" | "services">("voice");
+  const [activeTab, setActiveTab] = useState<"voice" | "brain" | "accounts" | "engines" | "memory" | "perf" | "theme" | "services">("voice");
 
   const ttsEnabled = useJarvisStore((s) => s.ttsEnabled);
   const selectedVoice = useJarvisStore((s) => s.selectedVoice);
@@ -121,6 +122,7 @@ export function SettingsPanel() {
   const tabs = [
     { id: "voice" as const, label: "Voix", icon: <Volume2 /> },
     { id: "brain" as const, label: "Cerveau", icon: <Cpu /> },
+    { id: "accounts" as const, label: "Comptes", icon: <Link2 /> },
     { id: "engines" as const, label: "Moteurs", icon: <Wrench /> },
     { id: "memory" as const, label: "Mémoire", icon: <Brain /> },
     { id: "perf" as const, label: "Performances", icon: <Gauge /> },
@@ -251,6 +253,8 @@ export function SettingsPanel() {
 
                   {/* ── BRAIN TAB ── */}
                   {activeTab === "brain" && <ProvidersTab />}
+
+                  {activeTab === "accounts" && <AccountsTab />}
 
                   {activeTab === "engines" && <EnginesTab />}
 

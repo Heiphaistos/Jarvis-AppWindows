@@ -656,3 +656,8 @@ select.set-input option { background: #0b1118; color: #e6f6ff; }
 /* Textes secondaires des anciens onglets : bleu à 25-40 % d'opacité, illisible. */
 .modal-body [class*="text-blue-400/"], .modal-body [class*="text-blue-300/"] { color: var(--ink-mute); }
 .modal-body [class*="text-cyan-100/"] { color: var(--ink); }
+.set-account-write { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.025); }
+.set-account-write strong { color: var(--ink); font-weight: 600; }
+.set-account-help { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.set-chip.is-static { cursor: default; color: var(--ink-mute); }
+.set-chip.is-static:hover { border-color: var(--line-soft); color: var(--ink-mute); }
