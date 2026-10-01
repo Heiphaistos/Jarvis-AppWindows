@@ -177,6 +177,35 @@ async def providers_configure(req: ProviderConfigRequest) -> dict:
             raise HTTPException(status_code=400, detail=error)
     return pm.status()
 
+class CustomProviderRequest(BaseModel):
+    label: str
+    base_url: str
+    model: str = ""
+    api_key: str = ""
+    kind: str = "openai"
+
+
+@router.post("/providers/custom")
+async def providers_add_custom(req: CustomProviderRequest) -> dict:
+    """Ajoute une API (compatible OpenAI ou Anthropic) depuis l'onglet Cerveau."""
+    from core.providers import get_provider_manager
+    pm = get_provider_manager()
+    name, error = pm.add_custom(req.label, req.base_url, req.model, req.api_key, req.kind)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    return {**pm.status(), "created": name}
+
+
+@router.delete("/providers/custom/{name}")
+async def providers_remove_custom(name: str) -> dict:
+    from core.providers import get_provider_manager
+    pm = get_provider_manager()
+    error = pm.remove_custom(name)
+    if error:
+        raise HTTPException(status_code=404, detail=error)
+    return pm.status()
+
+
 @router.get("/providers/{name}/models")
 async def providers_models(name: str) -> dict:
     """Modèles proposés par un fournisseur, avec la clé enregistrée côté serveur."""

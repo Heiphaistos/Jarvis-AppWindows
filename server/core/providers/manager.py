@@ -84,6 +84,18 @@ DEFAULT_CHAINS: dict[str, list[str]] = {
 }
 _SPEC_RE = __import__("re").compile(r"^[a-z0-9_-]{1,40}(@[A-Za-z0-9._:/-]{1,120})?$")
 
+# APIs ajoutées par l'utilisateur depuis l'onglet Cerveau : identifiant « api-… ».
+CUSTOM_PREFIX = "api-"
+MAX_CUSTOM = 20
+_KINDS = ("openai", "anthropic")
+
+
+def _slug(label: str) -> str:
+    import re
+    import unicodedata
+    text = unicodedata.normalize("NFKD", label).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "-", text).strip("-")[:30] or "perso"
+
 
 def _mask(key: str) -> str:
     return ("••••" + key[-4:]) if len(key) > 4 else ("••••" if key else "")
@@ -101,6 +113,8 @@ class ProviderManager:
         self._config_path = data_dir / "providers.json"
         self._active_name = "local"
         self._configs: dict[str, dict] = {}
+        # APIs ajoutées par l'utilisateur : {"api-xxx": {"label": ..., "kind": "openai"|"anthropic"}}
+        self._custom: dict[str, dict] = {}
         self._chains: dict[str, list[str]] = {k: list(v) for k, v in DEFAULT_CHAINS.items()}
         self._hedging = True
         self.telemetry = Telemetry()
@@ -113,12 +127,20 @@ class ProviderManager:
             if self._config_path.exists():
                 data = json.loads(self._config_path.read_text(encoding="utf-8"))
                 self._active_name = str(data.get("active", "local"))
+                custom = data.get("custom", {})
+                if isinstance(custom, dict):
+                    self._custom = {
+                        name: {"label": str(c.get("label") or name)[:60],
+                               "kind": c.get("kind") if c.get("kind") in _KINDS else "openai"}
+                        for name, c in custom.items()
+                        if isinstance(c, dict) and _SPEC_RE.match(name) and name.startswith(CUSTOM_PREFIX)
+                    }
                 configs = data.get("configs", {})
                 if isinstance(configs, dict):
                     self._configs = {
                         name: {k: str(v) for k, v in cfg.items() if k in _CONFIG_FIELDS}
                         for name, cfg in configs.items()
-                        if isinstance(cfg, dict) and name in PRESETS
+                        if isinstance(cfg, dict) and self.preset(name) is not None
                     }
                 routing = data.get("routing", {})
                 if isinstance(routing, dict):
@@ -130,7 +152,7 @@ class ProviderManager:
                     self._hedging = bool(routing.get("hedging", True))
         except Exception as e:
             logger.warning(f"providers.json illisible ({e}) — retour au provider local")
-            self._active_name, self._configs = "local", {}
+            self._active_name, self._configs, self._custom = "local", {}, {}
         if self._active_name not in ("local", AUTO) and self._build(self._active_name) is None:
             logger.warning(f"Provider actif '{self._active_name}' non configuré — retour au local")
             self._active_name = "local"
@@ -141,6 +163,7 @@ class ProviderManager:
             json.dumps({
                 "active": self._active_name,
                 "configs": self._configs,
+                "custom": self._custom,
                 "routing": {"chains": self._chains, "hedging": self._hedging},
             }, ensure_ascii=False, indent=2),
             encoding="utf-8",
@@ -148,10 +171,23 @@ class ProviderManager:
 
     # ── Construction ────────────────────────────────────────────────────────
 
+    def preset(self, name: str) -> dict | None:
+        """Preset intégré ou API ajoutée par l'utilisateur."""
+        if name in PRESETS:
+            return PRESETS[name]
+        custom = self._custom.get(name)
+        if custom is None:
+            return None
+        return {"kind": custom["kind"], "label": custom["label"], "base_url": "", "model": "", "needs_key": False}
+
+    def names(self) -> list[str]:
+        """Tous les fournisseurs configurables : presets puis APIs ajoutées."""
+        return [*PRESETS, *self._custom]
+
     def _build(self, name: str, model_override: str | None = None) -> LLMProvider | None:
         if name == "local":
             return self._local
-        preset = PRESETS.get(name)
+        preset = self.preset(name)
         if preset is None:
             return None
         cfg = self._configs.get(name, {})
@@ -217,7 +253,8 @@ class ProviderManager:
             if provider is None or provider.name == "local":
                 continue
             # Les API sans clé (Ollama, LM Studio…) ne comptent que si l'utilisateur les a réglées.
-            if not PRESETS[provider.name]["needs_key"] and provider.name not in self._configs:
+            preset = self.preset(provider.name)
+            if preset is not None and not preset["needs_key"] and provider.name not in self._configs:
                 continue
             key = brain_key(provider)
             if key not in seen:
@@ -250,7 +287,7 @@ class ProviderManager:
 
     def configure(self, name: str, fields: dict) -> str:
         """Met à jour la config d'un provider. Retourne un message d'erreur ou ''."""
-        if name == "local" or name not in PRESETS:
+        if name == "local" or self.preset(name) is None:
             return f"Provider inconnu ou non configurable: {name}"
         current = dict(self._configs.get(name, {}))
         for key in _CONFIG_FIELDS:
@@ -263,6 +300,43 @@ class ProviderManager:
         self._save_config()
         return ""
 
+    def add_custom(self, label: str, base_url: str, model: str = "", api_key: str = "",
+                   kind: str = "openai") -> tuple[str, str]:
+        """Ajoute une API (compatible OpenAI ou Anthropic). Retourne (identifiant, erreur)."""
+        label = " ".join(str(label).split())[:60]
+        if not label:
+            return "", "Donnez un nom à cette API"
+        if kind not in _KINDS:
+            return "", f"Type d'API inconnu : {kind}"
+        if len(self._custom) >= MAX_CUSTOM:
+            return "", f"{MAX_CUSTOM} APIs personnalisées au maximum"
+        base_url = str(base_url).strip()
+        if not base_url.startswith(("http://", "https://")):
+            return "", "L'adresse doit commencer par http:// ou https://"
+        base = CUSTOM_PREFIX + _slug(label)
+        name, i = base, 2
+        while name in PRESETS or name in self._custom:
+            name, i = f"{base}-{i}", i + 1
+        self._custom[name] = {"label": label, "kind": kind}
+        error = self.configure(name, {"base_url": base_url, "model": model, "api_key": api_key})
+        if error:
+            del self._custom[name]
+            return "", error
+        return name, ""
+
+    def remove_custom(self, name: str) -> str:
+        """Supprime une API ajoutée par l'utilisateur (et la retire des chaînes AUTO)."""
+        if name not in self._custom:
+            return f"API personnalisée inconnue : {name}"
+        del self._custom[name]
+        self._configs.pop(name, None)
+        for level, chain in self._chains.items():
+            self._chains[level] = [x for x in chain if x.partition("@")[0] != name]
+        if self._active_name == name:
+            self._active_name = "local"
+        self._save_config()
+        return ""
+
     def set_routing(self, chains: dict | None = None, hedging: bool | None = None) -> str:
         """Met à jour les chaînes du mode AUTO. Retourne un message d'erreur ou ''."""
         if chains is not None:
@@ -270,7 +344,7 @@ class ProviderManager:
                 if level not in LEVELS or not isinstance(specs, list):
                     return f"Niveau inconnu : {level}"
                 bad = [x for x in specs if not isinstance(x, str) or not _SPEC_RE.match(x)
-                       or x.partition("@")[0] not in (*PRESETS, "local")]
+                       or x.partition("@")[0] not in (*self.names(), "local")]
                 if bad:
                     return f"Cerveau invalide : {bad[0]}"
                 self._chains[level] = list(specs)[:12]
@@ -289,7 +363,7 @@ class ProviderManager:
             self.schedule_warmup()
             logger.info("Cerveau actif : AUTO (routage multi-modèles)")
             return ""
-        if name != "local" and name not in PRESETS:
+        if name != "local" and self.preset(name) is None:
             return f"Provider inconnu: {name}"
         provider = self._build(name)
         if provider is None:
@@ -305,7 +379,7 @@ class ProviderManager:
         members: list[LLMProvider] = []
         if self._local.is_available:
             members.append(self._local)
-        for name in PRESETS:
+        for name in self.names():
             provider = self._build(name)
             if provider is not None and provider.is_available:
                 members.append(provider)
@@ -313,7 +387,7 @@ class ProviderManager:
 
     def judge_provider(self) -> LLMProvider:
         """Le cerveau le plus capable disponible — arbitre du conseil."""
-        for name in _JUDGE_ORDER:
+        for name in (*_JUDGE_ORDER, *self._custom):
             provider = self._build(name)
             if provider is not None and provider.is_available:
                 return provider
@@ -322,10 +396,12 @@ class ProviderManager:
     def status(self) -> dict:
         """État complet pour l'UI — les clés API sont masquées."""
         providers = []
-        for name, preset in PRESETS.items():
+        for name in self.names():
+            preset = self.preset(name)
             cfg = self._configs.get(name, {})
             providers.append({
                 "name": name,
+                "custom": name in self._custom,
                 "label": preset["label"],
                 "kind": preset["kind"],
                 "needs_key": preset["needs_key"],

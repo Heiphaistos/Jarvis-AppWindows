@@ -37,6 +37,8 @@ export interface ProviderInfo {
   model: string;
   api_key_masked: string;
   configured: boolean;
+  /** API ajoutée par l'utilisateur (supprimable). */
+  custom?: boolean;
 }
 
 export type BrainLevel = "instant" | "standard" | "deep";

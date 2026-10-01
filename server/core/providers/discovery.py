@@ -20,8 +20,7 @@ _MAX_MODELS = 400
 
 def _endpoint(pm, name: str) -> tuple[str, str, str, str]:
     """(kind, base_url, api_key, modèle) d'un preset, avec la config enregistrée."""
-    from core.providers.manager import PRESETS
-    preset = PRESETS.get(name)
+    preset = pm.preset(name)
     if preset is None:
         raise ValueError(f"Fournisseur inconnu : {name}")
     cfg = pm._configs.get(name, {})  # noqa: SLF001 — lecture interne au package

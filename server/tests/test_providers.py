@@ -112,3 +112,31 @@ def test_tous_les_presets_construisibles():
     for name, preset in PRESETS.items():
         assert preset["kind"] in ("anthropic", "openai")
         assert "label" in preset
+
+
+def test_api_personnalisee_ajout_activation_suppression(tmp_path):
+    pm = ProviderManager(FakeLocalManager(), tmp_path)
+    name, err = pm.add_custom("Mon Serveur IA", "https://ia.exemple.fr/v1", "mon-modele", "sk-test-1234")
+    assert err == "" and name == "api-mon-serveur-ia"
+    status = {p["name"]: p for p in pm.status()["providers"]}
+    assert status[name]["custom"] and status[name]["configured"]
+    assert status[name]["api_key_masked"] == "••••1234"
+    assert pm.set_active(name) == ""
+    assert pm.set_routing({"deep": [f"{name}@autre-modele", "anthropic"]}) == ""
+    # Persistée et rechargée
+    pm2 = ProviderManager(FakeLocalManager(), tmp_path)
+    assert pm2.active.name == name and pm2.active.model == "mon-modele"
+    # Même nom → identifiant distinct
+    name2, _ = pm2.add_custom("Mon serveur IA", "http://localhost:8080/v1")
+    assert name2 == "api-mon-serveur-ia-2"
+    assert pm2.remove_custom(name) == ""
+    assert pm2.active.name == "local"
+    assert all(not s.startswith(name + "@") for s in pm2._chains["deep"])
+
+
+def test_api_personnalisee_refusee(tmp_path):
+    pm = ProviderManager(FakeLocalManager(), tmp_path)
+    assert pm.add_custom("", "https://x.fr")[1]
+    assert pm.add_custom("X", "ftp://x.fr")[1]
+    assert pm.add_custom("X", "https://x.fr", kind="bizarre")[1]
+    assert pm.remove_custom("anthropic")
