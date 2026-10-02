@@ -359,10 +359,13 @@ code, pre, .font-mono { font-family: var(--font-mono); }
 /* ── Rail de télémétrie ─────────────────────────────────────────────────────── */
 
 .rail { padding: 20px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
-/* Le rail défile lui-même : à -1px, les coins ::before/::after dépassaient d'1px et faisaient naître deux barres de défilement. */
-.rail.panel::before { top: 0; left: 0; }
-.rail.panel::after { bottom: 0; right: 0; }
-.rail-title { font-family: var(--font-display); font-size: 10.5px; letter-spacing: 0.3em; color: var(--accent); font-weight: 600; text-transform: uppercase; }
+/* Panneaux qui défilent ou rognent (rail, chat, duo) : à -1px, les coins ::before/::after dépassaient d'1px de la boîte de défilement
+   (barres H + V sur le rail ; 1 px défilable par programme sur chat/duo, overflow:hidden). */
+.rail.panel::before, .chat.panel::before, .side.panel::before { top: 0; left: 0; }
+.rail.panel::after, .chat.panel::after, .side.panel::after { bottom: 0; right: 0; }
+/* Hauteurs de ligne entières dans le rail : 13px x 1.35 = 17,55 px et 10,5px x 1.5 = 15,75 px laissaient un reste fractionnaire
+   (Tactique + 2 avertissements : contenu à N,33 px) -> à la hauteur limite, 1,33 px de trop = 1 px de défilement vertical. */
+.rail-title { font-family: var(--font-display); font-size: 10.5px; line-height: 16px; letter-spacing: 0.3em; color: var(--accent); font-weight: 600; text-transform: uppercase; }
 .gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 8px; }
 .gauges.row { grid-template-columns: repeat(4, 1fr); }
 .gauge { position: relative; display: grid; justify-items: center; gap: 2px; }
@@ -374,13 +377,13 @@ code, pre, .font-mono { font-family: var(--font-mono); }
 [data-skin="tactical"] .gauge .g-val { stroke-linecap: butt; }
 .gauge b { position: absolute; top: 28px; font-family: var(--font-mono); font-size: 13.5px; font-weight: 500; color: #fff; }
 .gauges.row .gauge b { top: 21px; font-size: 12px; }
-.gauge span { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.2em; color: var(--ink-mute); }
+.gauge span { font-family: var(--font-mono); font-size: 10.5px; line-height: 16px; letter-spacing: 0.2em; color: var(--ink-mute); }
 .rail-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .rail-list div { display: flex; justify-content: space-between; gap: 10px; font-family: var(--font-mono); font-size: 12px; }
 .rail-list dt { color: var(--ink-mute); flex: none; }
 .rail-list dd { min-width: 0; color: var(--accent); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rail-foot { margin-top: auto; display: grid; gap: 8px; }
-.warn { display: flex; gap: 8px; align-items: flex-start; padding: 9px 11px; border-radius: var(--radius-sm); font-size: 13px; line-height: 1.35; color: var(--amber); background: rgba(255, 170, 0, 0.07); border: 1px solid rgba(255, 170, 0, 0.25); }
+.warn { display: flex; gap: 8px; align-items: flex-start; padding: 9px 11px; border-radius: var(--radius-sm); font-size: 13px; line-height: 17px; color: var(--amber); background: rgba(255, 170, 0, 0.07); border: 1px solid rgba(255, 170, 0, 0.25); }
 .warn.err { color: #ff8095; background: rgba(255, 68, 102, 0.07); border-color: rgba(255, 68, 102, 0.28); }
 .warn svg { width: 15px; height: 15px; flex: none; margin-top: 2px; }
 
