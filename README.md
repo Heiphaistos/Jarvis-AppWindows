@@ -2,7 +2,7 @@
   <h1>J.A.R.V.I.S.</h1>
   <p><strong>Assistant IA local style Iron Man — Cerveau multi-API (local ou cloud), wake word « Hey Jarvis », HUD holographique 3D, 51 outils, vision.</strong></p>
 
-  ![Version](https://img.shields.io/badge/version-5.4.0-blue)
+  ![Version](https://img.shields.io/badge/version-5.5.0-blue)
   ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20Web-0078D4)
   ![Stack](https://img.shields.io/badge/stack-Tauri%20v2%20%2B%20Python%20FastAPI-purple)
   ![CUDA](https://img.shields.io/badge/CUDA-12.1%2B-76B900?logo=nvidia)
@@ -17,7 +17,7 @@ J.A.R.V.I.S. (*Just A Rather Very Intelligent System*) est un assistant IA local
 
 ---
 
-## Nouveautés 5.4 — version web, panneau web local, Linux
+## Nouveautés 5.5 — version web, panneau web local, Linux
 
 - **Panneau web local** (comme NiTriTe Agent) : `jarvis_server --web` (ou `JARVIS-Web.bat` dans le portable) fait tourner JARVIS sur le PC **sans fenêtre native** ; l'interface s'ouvre dans le navigateur déjà installé, déjà connectée. Même JARVIS, mêmes outils, une WebView en moins. Menu 🌐 : démarrer avec la session, arrêter JARVIS. Accès réservé à l'onglet ouvert par JARVIS : clé de 256 bits dans le fragment de l'URL échangée contre un cookie `HttpOnly`, vérification du Host (DNS rebinding) et de l'origine. Options `--app` (fenêtre Edge/Chrome sans onglets), `--lan`, `--port`, `--no-browser`.
 - **Version web hébergée** : `deploy/web/` (Docker + nginx) pour l'installer sur un VPS en HTTPS, avec mot de passe. Cerveaux, voix et transcription dans le cloud ; les 27 outils qui agiraient sur la machine (fenêtres, fichiers, NiTriTe…) y sont retirés. Mesuré : **≈ 50 Mo de RAM au repos, ≈ 64 Mo avec 10 sessions vocales, image de 351 Mo**. Interface utilisable sur téléphone. Détails et chiffres : [`docs/WEB.md`](docs/WEB.md).
