@@ -20,6 +20,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import ipaddress
 import secrets
 import time
 from collections import defaultdict, deque
@@ -37,6 +38,7 @@ from utils.logger import get_logger
 logger = get_logger("security")
 
 COOKIE = "jarvis_session"
+MIN_PASSWORD_CHARS = 12  # version hébergée
 DESKTOP_ORIGINS = frozenset({
     "http://localhost:1420",    # dev Vite
     "http://127.0.0.1:1420",
@@ -204,13 +206,25 @@ def _scheme(headers: Headers, scope: dict, access: Access) -> str:
     return "https" if scope.get("scheme") in ("https", "wss") else "http"
 
 
+def _behind_local_proxy(peer: str) -> bool:
+    """Pair local ou privé (nginx sur la machine, réseau Docker) : un visiteur d'Internet
+    ne peut pas arriver de là, la requête a donc traversé notre propre proxy."""
+    try:
+        ip = ipaddress.ip_address(peer)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_private
+
+
 def client_ip(request: Request) -> str:
     access = get_access()
-    if access.trust_proxy:
-        fwd = request.headers.get("x-forwarded-for", "")
-        if fwd:
-            return fwd.split(",")[-1].strip()  # ajouté par NOTRE proxy (le dernier)
-    return request.client.host if request.client else "?"
+    peer = request.client.host if request.client else "?"
+    fwd = request.headers.get("x-forwarded-for", "")
+    # Sans cela, derrière un nginx oublié en JARVIS_TRUST_PROXY=0, tous les visiteurs
+    # auraient l'IP du proxy : 5 erreurs de l'un bloqueraient la connexion de tous.
+    if fwd and (access.trust_proxy or _behind_local_proxy(peer)):
+        return fwd.split(",")[-1].strip()  # ajouté par NOTRE proxy (le dernier)
+    return peer
 
 
 class AccessMiddleware:

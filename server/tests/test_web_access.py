@@ -171,3 +171,18 @@ def test_shutdown_requires_the_launch_token(monkeypatch):
     assert c.post("/api/shutdown").status_code == 403
     assert c.post("/api/shutdown", headers={"X-Jarvis-Token": "wrong"}).status_code == 403
     assert c.post("/api/shutdown", headers={"X-Jarvis-Token": "s3cret"}).status_code == 200
+
+
+def test_login_limit_is_per_visitor_behind_a_local_proxy():
+    """Derrière nginx sans JARVIS_TRUST_PROXY, chaque visiteur garde sa propre limite d'essais."""
+    from starlette.requests import Request
+    configure("hosted", port=PORT, password="un-mot-de-passe-long")
+
+    def ip(peer: str, fwd: str = "") -> str:
+        headers = [(b"x-forwarded-for", fwd.encode())] if fwd else []
+        return security.client_ip(Request({"type": "http", "client": (peer, 1234), "headers": headers}))
+
+    assert ip("127.0.0.1", "203.0.113.7") == "203.0.113.7"           # nginx sur la machine
+    assert ip("172.18.0.1", "198.51.100.1, 203.0.113.8") == "203.0.113.8"  # réseau Docker : l'entrée de nginx
+    assert ip("8.8.8.8", "1.2.3.4") == "8.8.8.8"                                    # client direct : en-tête ignoré
+    assert ip("127.0.0.1") == "127.0.0.1"

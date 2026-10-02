@@ -53,7 +53,7 @@ Le serveur tourne dans un conteneur Docker, derrière nginx en HTTPS. Le navigat
 git clone https://github.com/Heiphaistos/Jarvis-AppWindows.git /opt/jarvis-app
 cd /opt/jarvis-app
 cp deploy/web/.env.example deploy/web/.env
-nano deploy/web/.env           # JARVIS_PASSWORD (long) et JARVIS_PUBLIC_ORIGIN
+nano deploy/web/.env           # JARVIS_PASSWORD (12 caractères minimum, sinon JARVIS refuse de démarrer) et JARVIS_PUBLIC_ORIGIN
 docker compose -f deploy/web/docker-compose.yml up -d --build
 
 sudo cp deploy/web/nginx-jarvis-app.conf /etc/nginx/sites-available/jarvis-app.heiphaistos.org
@@ -70,7 +70,7 @@ Ce qui change par rapport à l'application :
 - Restent : conversation, recherche web et recherche approfondie, météo, actualités, Wikipédia, lecture de pages, calculs et conversions, traduction, mémoire, minuteurs, rappels et routines (annoncés dans l'onglet ouvert), Gmail, mode LIVE Gemini.
 - Pas de modèle local : cerveaux cloud, transcription Groq ou OpenAI, voix Edge (Henri) ou Gemini.
 - Pas de mot-clé « Hey Jarvis » : il imposerait d'envoyer le micro en continu au serveur.
-- Un seul compte (un mot de passe) : la mémoire est celle d'une personne. Cinq essais de mot de passe par adresse IP toutes les 5 minutes.
+- Un seul compte (un mot de passe) : la mémoire est celle d'une personne. Cinq essais de mot de passe par adresse IP toutes les 5 minutes ; derrière un proxy local (nginx sur la machine, réseau Docker), l'adresse retenue est celle du visiteur, même sans `JARVIS_TRUST_PROXY`.
 
 ### Ressources mesurées
 

@@ -82,7 +82,7 @@ from tools.registry import ToolRegistry
 from api.routes import router
 from api.web_routes import router as web_router
 from api.websocket import websocket_handler
-from api.security import AccessMiddleware, configure as _configure_access
+from api.security import MIN_PASSWORD_CHARS, AccessMiddleware, configure as _configure_access
 
 logger = get_logger("main")
 
@@ -315,7 +315,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("JARVIS arrêté.")
 
 
-app = FastAPI(title="JARVIS Core", version="5.5.0", lifespan=lifespan)
+app = FastAPI(title="JARVIS Core", version="5.5.1", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:1420", "http://127.0.0.1:1420", "tauri://localhost",
@@ -350,8 +350,10 @@ def setup_web(app: FastAPI) -> None:
     if settings.mode == "hosted":
         from tools.registry import HOST_TOOLS
         tools.disable(HOST_TOOLS, "version web hébergée — JARVIS n'a pas accès au PC de Monsieur.")
-        if not settings.password:
-            logger.error("JARVIS_PASSWORD manquant : personne ne pourra se connecter.")
+        if len(settings.password) < MIN_PASSWORD_CHARS:
+            # Exposée sur Internet, la version hébergée ne démarre pas avec un mot de passe devinable.
+            logger.error(f"JARVIS_PASSWORD manquant ou trop court ({MIN_PASSWORD_CHARS} caractères minimum) : arrêt.")
+            sys.exit(1)
     index = settings.web_dir / "index.html"
     if index.is_file():
         from fastapi.staticfiles import StaticFiles
