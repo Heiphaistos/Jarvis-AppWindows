@@ -44,7 +44,9 @@ jobs:
         run: docker build -f deploy/web/Dockerfile -t jarvis-web:ci .
       - name: Démarrage et santé
         run: |
-          docker run -d --name jw -e JARVIS_PASSWORD=ci -p 127.0.0.1:8790:8765 jarvis-web:ci
+          # Mot de passe trop court : la version hébergée doit refuser de démarrer.
+          test "$(docker run --rm -e JARVIS_PASSWORD=court jarvis-web:ci >/dev/null 2>&1; echo $?)" != 0
+          docker run -d --name jw -e JARVIS_PASSWORD=ci-mot-de-passe-long -p 127.0.0.1:8790:8765 jarvis-web:ci
           for i in $(seq 1 30); do curl -fs 127.0.0.1:8790/api/health && break; sleep 1; done
           curl -fs 127.0.0.1:8790/ | grep -q "J.A.R.V.I.S."
           test "$(curl -s -o /dev/null -w '%{http_code}' 127.0.0.1:8790/api/memories)" = 401
