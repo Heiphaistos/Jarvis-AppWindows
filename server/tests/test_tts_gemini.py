@@ -65,3 +65,11 @@ def test_texte_prononcable():
     assert speakable("|---|:---:|") == ""
     assert speakable("Voici :\n```python\nprint(1)\n```") == "Voici : le code est affiché à l'écran."
     assert speakable("Source : https://exemple.fr/page") == "Source :"
+
+
+def test_sans_piper_voix_en_ligne_par_defaut():
+    # Linux sans Piper, version web hébergée : JARVIS parle quand même.
+    t = TTSManager(S())
+    assert t.is_available and t._edge_voice == tts_mod.DEFAULT_EDGE_VOICE
+    t.set_voice(Path("/nope/fr_FR-upmc-medium.onnx"))
+    assert t.is_available

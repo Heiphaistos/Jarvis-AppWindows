@@ -14,7 +14,11 @@ _MAX_ROUTED_SKILLS = 4  # au-delà, le prompt local devient contre-productif
 
 def _resolve_skills_dir() -> Path:
     if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent / "skills"
+        beside = Path(sys.executable).parent / "skills"
+        if beside.is_dir():
+            return beside
+        # Sinon, la copie embarquée dans l'exécutable (Linux : l'exe est seul).
+        return Path(getattr(sys, "_MEIPASS", beside.parent)) / "skills"
     return Path(__file__).parents[1] / "skills"
 
 

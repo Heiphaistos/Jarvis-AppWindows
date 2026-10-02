@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-import os
 import wave
 
 import numpy as np
@@ -14,26 +13,33 @@ logger = get_logger("cloud_stt")
 # Transcription dans le cloud quand une clé est configurée : Whisper large-v3
 # (Groq, gratuit et ~0,3 s) ou gpt-4o-mini-transcribe (OpenAI) comprennent le
 # français bien mieux que le Whisper « small » local sur CPU. Whisper local
-# reste le secours (hors ligne, quota, clé absente). JARVIS_CLOUD_STT=0 coupe
-# l'envoi de l'audio vers le cloud.
+# reste le secours (hors ligne, quota, clé absente). Le réglage
+# « voice.cloud_stt » (ou JARVIS_CLOUD_STT=0) coupe l'envoi de l'audio vers le
+# cloud ; « voice.stt_engine » force un moteur.
 ENGINES = [
-    # (provider, modèle, url de base par défaut)
-    ("groq", "whisper-large-v3-turbo", "https://api.groq.com/openai/v1"),
-    ("openai", "gpt-4o-mini-transcribe", "https://api.openai.com/v1"),
+    # (provider, réglage du modèle, url de base par défaut)
+    ("groq", "voice.groq_stt_model", "https://api.groq.com/openai/v1"),
+    ("openai", "voice.openai_stt_model", "https://api.openai.com/v1"),
 ]
 _TIMEOUT_S = 8.0
 
 
 def enabled() -> bool:
-    return os.environ.get("JARVIS_CLOUD_STT", "1").strip().lower() not in ("0", "false", "off", "non")
+    from utils.runtime_settings import setting
+    return bool(setting("voice.cloud_stt")) and setting("voice.stt_engine") != "local"
 
 
 def engines(providers) -> list[tuple[str, str, str, str]]:
     """Moteurs utilisables : (nom, modèle, url, clé) dans l'ordre de préférence."""
     if not enabled() or providers is None:
         return []
+    from utils.runtime_settings import setting
+    forced = setting("voice.stt_engine")
     out = []
-    for name, model, default_url in ENGINES:
+    for name, model_key, default_url in ENGINES:
+        if forced not in ("auto", name):
+            continue
+        model = setting(model_key)
         key = providers.api_key(name)
         if key:
             cfg_url = getattr(providers, "_configs", {}).get(name, {}).get("base_url") or default_url
@@ -52,6 +58,11 @@ def to_wav(audio: np.ndarray, rate: int = 16000) -> bytes:
     return buf.getvalue()
 
 
+def _language() -> str:
+    from utils.runtime_settings import setting
+    return str(setting("voice.stt_language") or "fr")
+
+
 async def transcribe(audio: np.ndarray, providers, client=None) -> str | None:
     """Texte transcrit par le premier moteur cloud qui répond, None si aucun."""
     candidates = engines(providers)
@@ -66,7 +77,7 @@ async def transcribe(audio: np.ndarray, providers, client=None) -> str | None:
             resp = await http.post(
                 f"{base_url}/audio/transcriptions",
                 headers={"Authorization": f"Bearer {key}"},
-                data={"model": model, "language": "fr", "response_format": "json",
+                data={"model": model, "language": _language(), "response_format": "json",
                       "temperature": "0", "prompt": _INITIAL_PROMPT},
                 files={"file": ("voix.wav", wav, "audio/wav")},
                 timeout=httpx.Timeout(_TIMEOUT_S),

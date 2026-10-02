@@ -7,7 +7,7 @@ logger = get_logger("rate_limiter")
 
 _TEXT_QUERY_MAX = 20
 _TEXT_QUERY_WINDOW = 60.0
-_AUDIO_CHUNK_MAX = 300
+_AUDIO_CHUNK_MAX = 1500   # ~25 morceaux/s : un micro 48 kHz en envoie ~12 par seconde
 _AUDIO_CHUNK_WINDOW = 60.0
 
 

@@ -4,11 +4,12 @@ import { Newspaper, Timer, Eye, Atom, BookmarkPlus } from "lucide-react";
 import { useJarvisStore } from "../../stores/jarvisStore";
 import { Message } from "./Message";
 import { TypingIndicator } from "./TypingIndicator";
+import { serverMode } from "../../lib/session";
 
-const SUGGESTIONS = [
+const SUGGESTIONS: { icon: typeof Newspaper; text: string; pc?: boolean }[] = [
   { icon: Newspaper, text: "Fais-moi le point" },
   { icon: Timer, text: "Mets un minuteur de 10 minutes pour les pâtes" },
-  { icon: Eye, text: "Regarde mon écran et dis-moi ce que tu vois" },
+  { icon: Eye, text: "Regarde mon écran et dis-moi ce que tu vois", pc: true },
   { icon: Atom, text: "Explique-moi le fonctionnement d'un réacteur à fusion" },
   { icon: BookmarkPlus, text: "Souviens-toi que je préfère les réponses courtes" },
 ];
@@ -39,7 +40,7 @@ export function ChatPanel() {
             <h2>{greeting()}</h2>
             <p>{isConnected ? "Que puis-je faire pour vous ?" : "Connexion au cœur en cours…"}</p>
             <div className="welcome-grid">
-              {SUGGESTIONS.map(({ icon: Icon, text }, i) => (
+              {SUGGESTIONS.filter((s) => !(s.pc && serverMode() === "hosted")).map(({ icon: Icon, text }, i) => (
                 <motion.button
                   key={text}
                   className="welcome-card"

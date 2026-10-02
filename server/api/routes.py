@@ -46,14 +46,14 @@ async def shutdown(request: Request) -> dict:
     au lancement (JARVIS_SHUTDOWN_TOKEN) : une page web ne peut pas éteindre le serveur."""
     import hmac
     import os
+    from utils.lifecycle import request_shutdown
     expected = os.environ.get("JARVIS_SHUTDOWN_TOKEN", "")
     given = request.headers.get("x-jarvis-token", "")
-    if not expected or not hmac.compare_digest(given, expected):
+    if not expected or not hmac.compare_digest(given.encode(), expected.encode()):
         raise HTTPException(status_code=403, detail="Jeton invalide")
-    import main  # lazy — main est déjà chargé
-    if main.uvicorn_server is not None:
-        main.uvicorn_server.should_exit = True
     logger.info("Arrêt demandé par JARVIS.exe")
+    # Laisse partir la réponse 200 (attendue par JARVIS.exe) avant d'arrêter le serveur.
+    asyncio.get_running_loop().call_later(0.3, request_shutdown)
     return {"status": "stopping"}
 
 
@@ -194,32 +194,124 @@ async def providers_configure(req: ProviderConfigRequest) -> dict:
             raise HTTPException(status_code=400, detail=error)
     return pm.status()
 
+class CustomProviderRequest(BaseModel):
+    label: str
+    base_url: str
+    model: str = ""
+    api_key: str = ""
+    kind: str = "openai"
+
+
+@router.post("/providers/custom")
+async def providers_add_custom(req: CustomProviderRequest) -> dict:
+    """Ajoute une API (compatible OpenAI ou Anthropic) depuis l'onglet Cerveau."""
+    from core.providers import get_provider_manager
+    pm = get_provider_manager()
+    name, error = pm.add_custom(req.label, req.base_url, req.model, req.api_key, req.kind)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    return {**pm.status(), "created": name}
+
+
+@router.delete("/providers/custom/{name}")
+async def providers_remove_custom(name: str) -> dict:
+    from core.providers import get_provider_manager
+    pm = get_provider_manager()
+    error = pm.remove_custom(name)
+    if error:
+        raise HTTPException(status_code=404, detail=error)
+    return pm.status()
+
+
+@router.get("/providers/{name}/models")
+async def providers_models(name: str) -> dict:
+    """Modèles proposés par un fournisseur, avec la clé enregistrée côté serveur."""
+    import httpx
+    from core.providers import get_provider_manager
+    from core.providers.discovery import list_models
+    try:
+        return {"models": await list_models(get_provider_manager(), name)}
+    except (ValueError, httpx.HTTPError) as e:
+        raise HTTPException(status_code=400, detail=str(e) or "Fournisseur injoignable")
+
+
 @router.post("/providers/{name}/test")
 async def providers_test(name: str) -> dict:
-    """Essai reel d'un cerveau configure (cle, modele, URL) : une reponse tres courte, delai 20 s."""
-    import time
+    """Teste la connexion à un fournisseur (clé, adresse, modèle)."""
     from core.providers import get_provider_manager
-    provider = get_provider_manager().resolve(name)
-    if provider is None or not provider.is_available:
-        return {"ok": False, "error": "Cerveau non configuré (clé API ou modèle manquant)."}
-    t0 = time.monotonic()
-
-    async def _first_words() -> str:
-        out = ""
-        async for tok in provider.stream("Réponds en un mot.", [{"role": "user", "content": "Dis OK."}], max_tokens=8):
-            out += tok
-        return out
-
+    from core.providers.discovery import test_connection
     try:
-        reply = await asyncio.wait_for(_first_words(), timeout=20)
-    except asyncio.TimeoutError:
-        return {"ok": False, "error": "Pas de réponse en 20 s."}
-    except Exception as e:  # clé refusée, quota, réseau : message lisible, sans trace
-        return {"ok": False, "error": str(e)[:300] or type(e).__name__}
-    return {"ok": True, "ms": int((time.monotonic() - t0) * 1000), "reply": reply.strip()[:80]}
+        return await test_connection(get_provider_manager(), name)
+    except ValueError as e:
+        return {"ok": False, "detail": str(e)}
+
+
+# ── Réglages (Paramètres › Voix, Moteurs) ───────────────────────────────────
+
+class SettingsUpdate(BaseModel):
+    values: dict[str, bool | int | float | str]
+
+
+@router.get("/settings")
+async def settings_get() -> dict:
+    from utils.runtime_settings import get_settings
+    rs = get_settings()
+    return {"values": rs.snapshot(), "schema": rs.schema()}
+
+
+@router.post("/settings")
+async def settings_update(req: SettingsUpdate) -> dict:
+    from utils.runtime_settings import SettingsError, get_settings
+    rs = get_settings()
+    try:
+        values = rs.update(req.values)
+    except SettingsError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"values": values, "schema": rs.schema()}
 
 
 # ── Gmail OAuth ─────────────────────────────────────────────────────────────
+
+# ── Comptes connectés ───────────────────────────────────────────────────────
+
+class ConnectionUpdate(BaseModel):
+    values: dict[str, str | None] = {}
+    allow_write: bool | None = None
+
+
+@router.get("/connections")
+async def connections_status() -> dict:
+    """Comptes connectables et leur état. Les secrets ne sont jamais renvoyés."""
+    from core.connections import get_store
+    return {"connections": get_store().status()}
+
+
+@router.post("/connections/{cid}")
+async def connections_update(cid: str, req: ConnectionUpdate) -> dict:
+    from core.connections import get_store
+    try:
+        get_store().update(cid, req.values, req.allow_write)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"connections": get_store().status()}
+
+
+@router.post("/connections/{cid}/test")
+async def connections_test(cid: str) -> dict:
+    import tools.connection_tools  # noqa: F401 — enregistre les fonctions de test
+    from core.connections import get_store, test_connection
+    result = await asyncio.to_thread(test_connection, cid)
+    return {**result, "connections": get_store().status()}
+
+
+@router.delete("/connections/{cid}")
+async def connections_remove(cid: str) -> dict:
+    from core.connections import CONNECTORS, get_store
+    if cid not in CONNECTORS:
+        raise HTTPException(status_code=404, detail="Compte inconnu")
+    get_store().remove(cid)
+    return {"connections": get_store().status()}
+
 
 @router.get("/auth/gmail/status", response_model=GmailStatusResponse)
 async def gmail_auth_status() -> GmailStatusResponse:
@@ -242,7 +334,7 @@ async def upload_gmail_credentials(file: UploadFile = File(...)) -> dict:
             raise ValueError("Format invalide")
     except Exception:
         raise HTTPException(status_code=400, detail="Fichier credentials.json invalide.")
-    _DATA_DIR.mkdir(exist_ok=True)
+    _DATA_DIR.mkdir(parents=True, exist_ok=True)
     _CREDS_FILE.write_bytes(content)
     auth_url = await asyncio.to_thread(_build_gmail_auth_url)
     return {"status": "credentials_saved", "auth_url": auth_url}
@@ -284,12 +376,19 @@ async def gmail_disconnect() -> dict:
 
 # ── OAuth helpers (sync, run in thread) ─────────────────────────────────────
 
+def _gmail_redirect_uri() -> str:
+    """Adresse de retour OAuth : l'adresse publique en version hébergée, sinon localhost."""
+    from utils.config import settings
+    base = settings.public_origin.rstrip("/") or f"http://localhost:{settings.port}"
+    return f"{base}/api/auth/gmail/callback"
+
+
 def _build_gmail_auth_url() -> str:
     from google_auth_oauthlib.flow import InstalledAppFlow  # type: ignore[import]
     flow = InstalledAppFlow.from_client_secrets_file(
         str(_CREDS_FILE),
         scopes=GMAIL_SCOPES,
-        redirect_uri="http://localhost:8765/api/auth/gmail/callback",
+        redirect_uri=_gmail_redirect_uri(),
     )
     auth_url, _ = flow.authorization_url(
         access_type="offline",
@@ -304,9 +403,9 @@ def _exchange_code_for_token(code: str) -> None:
     flow = InstalledAppFlow.from_client_secrets_file(
         str(_CREDS_FILE),
         scopes=GMAIL_SCOPES,
-        redirect_uri="http://localhost:8765/api/auth/gmail/callback",
+        redirect_uri=_gmail_redirect_uri(),
     )
     flow.fetch_token(code=code)
-    _DATA_DIR.mkdir(exist_ok=True)
+    _DATA_DIR.mkdir(parents=True, exist_ok=True)
     _TOKEN_FILE.write_text(flow.credentials.to_json())
     logger.info("Token Gmail sauvegardé")

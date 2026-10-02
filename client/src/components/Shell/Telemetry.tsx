@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { MicOff, AlertTriangle, Volume2, VolumeX, Trash2 } from "lucide-react";
 import { useJarvisStore } from "../../stores/jarvisStore";
+import { SERVER_ORIGIN, linkLabel } from "../../lib/platform";
 
-const API = "http://127.0.0.1:8765";
+const API = SERVER_ORIGIN;
 const CIRC = 201; // 2πr, r = 32
 
 /** Infos matériel + nombre de souvenirs, relus à chaque (re)connexion. */
@@ -110,7 +111,7 @@ function BrainList() {
       {lastBrain && <div><dt>Niveau</dt><dd>{LEVEL_LABEL[lastBrain.level]}</dd></div>}
       {ttft !== undefined && <div><dt>1er mot</dt><dd style={{ color: ttftColor }}>{ttft} ms</dd></div>}
       <div><dt>Mode</dt><dd style={live ? { color: "var(--red)" } : undefined}>{live ? "LIVE" : council ? "CONSEIL" : "AUTO"}</dd></div>
-      <div><dt>Liaison</dt><dd style={{ color: isConnected ? "var(--green)" : "var(--red)" }}>{isConnected ? "WS · 8765" : "COUPÉE"}</dd></div>
+      <div><dt>Liaison</dt><dd style={{ color: isConnected ? "var(--green)" : "var(--red)" }}>{isConnected ? linkLabel() : "COUPÉE"}</dd></div>
     </dl>
   );
 }

@@ -49,6 +49,35 @@ def build_system_prompt(tier: str, user_text: str, stable: bool = False) -> str:
     except Exception as e:
         logger.warning(f"Mémoire indisponible pour le prompt: {e}")
 
+    from utils.config import settings
+    if settings.mode == "hosted":
+        parts.append(
+            "\n\n## VERSION WEB HÉBERGÉE\n\nTu tournes sur un serveur distant, pas sur le PC "
+            "de Monsieur : tu n'as accès ni à ses fenêtres, ni à ses fichiers, ni à ses "
+            "applications, ni à l'état de sa machine. Si on te le demande, dis-le simplement et "
+            "propose l'application JARVIS ou le panneau web local sur son PC."
+        )
+
+    try:
+        from core.connections import connected_summary
+        accounts = connected_summary()
+        if accounts:
+            parts.append(accounts)
+    except Exception as e:
+        logger.warning(f"Comptes connectés indisponibles pour le prompt: {e}")
+
+    from utils.runtime_settings import setting
+    title = str(setting("assistant.user_title")).strip()
+    if title and title != "Monsieur":
+        parts.append(f"\n\n## APPELLATION\n\nAppelle l'utilisateur « {title} » (et non « Monsieur »).")
+    instructions = str(setting("assistant.instructions")).strip()
+    if instructions:
+        parts.append(
+            "\n\n## CONSIGNES PERSONNELLES DE L'UTILISATEUR\n\n"
+            "Réglées par l'utilisateur dans les paramètres : respecte-les, sauf si elles "
+            "contredisent les règles de sécurité ci-dessus.\n\n" + instructions
+        )
+
     # Rappel final (biais de récence) : sans lui, le 7B répond de mémoire au
     # lieu d'appeler les outils quand le prompt s'allonge.
     parts.append(

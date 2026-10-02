@@ -50,15 +50,19 @@ def _male_speaker_id(voice_path: Path) -> int | None:
 # Gemini TTS : voix neurales expressives, pilotables par une consigne de ton.
 # Voix masculines graves adaptées à JARVIS : Charon, Orus, Iapetus, Algenib…
 GEMINI_TTS_MODEL = os.environ.get("JARVIS_GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
+
+
+def _gemini_tts_model() -> str:
+    from utils.runtime_settings import setting
+    return str(setting("tts.gemini_model") or GEMINI_TTS_MODEL)
 GEMINI_TTS_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 GEMINI_VOICES = ("Charon", "Orus", "Iapetus", "Algenib", "Alnilam", "Rasalgethi", "Sadaltager", "Schedar")
-# Consigne de jeu : majordome IA, calme, posé, légèrement pince-sans-rire.
-# Vide = aucune consigne (JARVIS_GEMINI_TTS_STYLE="").
-GEMINI_TTS_STYLE = os.environ.get(
-    "JARVIS_GEMINI_TTS_STYLE",
-    "Lis le texte suivant d'une voix grave, calme et posée, avec l'élégance flegmatique "
-    "d'un majordome britannique et une pointe d'ironie bienveillante : ",
-)
+# Consigne de ton : réglage tts.gemini_style (Paramètres › Moteurs).
+
+
+def _gemini_tts_style() -> str:
+    from utils.runtime_settings import setting
+    return str(setting("tts.gemini_style"))
 
 
 def pcm_to_wav(pcm: bytes, rate: int = 24000, channels: int = 1, width: int = 2) -> bytes:
@@ -99,6 +103,9 @@ def speakable(text: str) -> str:
     return t if re.search(r"[A-Za-zÀ-ÿ0-9]", t) else ""
 
 
+DEFAULT_EDGE_VOICE = "fr-FR-HenriNeural"
+
+
 class TTSManager:
     """Deux moteurs : Edge-TTS (voix neurales naturelles, en ligne) et Piper
     (local). Si la voix active est Edge et que le réseau échoue, bascule
@@ -117,8 +124,11 @@ class TTSManager:
         self._gemini_key: Callable[[], str] = lambda: ""
         self._piper_ok = self._piper_exe.exists() and self._voice.exists()
         if not self._piper_ok:
+            # Sans voix locale (Linux sans Piper, serveur web) : voix neurale en
+            # ligne Henri plutôt qu'un JARVIS muet.
+            self._edge_voice = DEFAULT_EDGE_VOICE
             logger.warning(
-                "Piper TTS non disponible — placez piper.exe + voix .onnx dans server/models/piper/"
+                f"Piper TTS non disponible ({self._piper_exe.parent}) — voix en ligne {DEFAULT_EDGE_VOICE}"
             )
 
     @property
@@ -142,7 +152,7 @@ class TTSManager:
         if not key:
             raise RuntimeError("clé Gemini absente (onglet CERVEAU)")
         payload = {
-            "contents": [{"parts": [{"text": f"{GEMINI_TTS_STYLE}{text}"}]}],
+            "contents": [{"parts": [{"text": f"{_gemini_tts_style()}{text}"}]}],
             "generationConfig": {
                 "responseModalities": ["AUDIO"],
                 "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": self._gemini_voice}}},
@@ -150,7 +160,7 @@ class TTSManager:
         }
         from core.providers.http import shared_client
         resp = await shared_client().post(
-            GEMINI_TTS_URL.format(model=GEMINI_TTS_MODEL), json=payload,
+            GEMINI_TTS_URL.format(model=_gemini_tts_model()), json=payload,
             headers={"x-goog-api-key": key, "Content-Type": "application/json"},
             timeout=httpx.Timeout(15.0, connect=5.0),
         )
@@ -167,6 +177,8 @@ class TTSManager:
         self._voice = voice_path
         self._speaker = _male_speaker_id(voice_path)
         self._piper_ok = self._piper_exe.exists() and voice_path.exists()
+        if not self._piper_ok:
+            self._edge_voice = DEFAULT_EDGE_VOICE  # voix locale absente : rester audible
         logger.info(f"Voix TTS changée: {voice_path.name} (speaker={self._speaker})")
 
     def set_edge_voice(self, voice_name: str) -> None:

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useJarvisStore } from "../stores/jarvisStore";
+import { wsUrl } from "../lib/platform";
 import type { ClientEvent, ServerEvent } from "../types";
 
-const WS_URL = "ws://127.0.0.1:8765/ws";
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
 
@@ -24,7 +24,7 @@ export function useWebSocket() {
       wsRef.current?.readyState === WebSocket.CONNECTING
     ) return;
 
-    const ws = new WebSocket(WS_URL);
+    const ws = new WebSocket(wsUrl());
     wsRef.current = ws;
 
     ws.onopen = () => {

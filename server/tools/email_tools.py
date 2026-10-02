@@ -7,7 +7,11 @@ from utils.logger import get_logger
 
 logger = get_logger("email_tools")
 
-_DATA_DIR = Path(__file__).parents[1] / "data"
+from utils.paths import data_dir as _data_dir
+
+# Dossier de données partagé (pas __file__ : en mode compilé ce serait le
+# dossier temporaire de PyInstaller, vidé à chaque arrêt).
+_DATA_DIR = _data_dir()
 _CREDS_FILE = _DATA_DIR / "google_credentials.json"
 _TOKEN_FILE = _DATA_DIR / "google_token.json"
 

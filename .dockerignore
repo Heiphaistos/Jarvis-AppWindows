@@ -1,0 +1,16 @@
+**/node_modules
+**/__pycache__
+**/*.pyc
+.git
+.logs
+client/dist
+client/src-tauri
+server/models
+server/data
+server/dist
+server/build
+server/.venv
+server/tests
+portable
+docs
+deploy/web/.env

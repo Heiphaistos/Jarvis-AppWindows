@@ -107,12 +107,13 @@ async def _check_resources() -> None:
 def _gpu_stats() -> tuple[float, float] | None:
     """(utilisation %, VRAM %) via nvidia-smi, ou None sans GPU NVIDIA."""
     import subprocess
+    from utils.platform import NO_WINDOW
     try:
         proc = subprocess.run(
             ["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total",
              "--format=csv,noheader,nounits"],
             capture_output=True, text=True, timeout=3,
-            creationflags=0x08000000,  # CREATE_NO_WINDOW
+            creationflags=NO_WINDOW,
         )
         if proc.returncode != 0:
             return None

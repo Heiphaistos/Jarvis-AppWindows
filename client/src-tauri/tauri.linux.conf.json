@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "targets": [
+      "deb",
+      "appimage",
+      "rpm"
+    ],
+    "resources": {
+      "resources/jarvis_server.exe": null,
+      "resources/jarvis_server": "jarvis_server",
+      "../../server/models/piper/piper.exe": null,
+      "../../server/models/piper/espeak-ng.dll": null,
+      "../../server/models/piper/piper_phonemize.dll": null,
+      "../../server/models/piper/onnxruntime.dll": null,
+      "../../server/models/piper/onnxruntime_providers_shared.dll": null,
+      "../../server/models/piper/libtashkeel_model.ort": null,
+      "../../server/models/piper/fr_FR-upmc-medium.onnx": null,
+      "../../server/models/piper/fr_FR-upmc-medium.onnx.json": null,
+      "../../server/models/piper/espeak-ng-data/": null
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "libasound2 | libasound2t64"
+        ]
+      },
+      "rpm": {
+        "depends": [
+          "alsa-lib"
+        ]
+      }
+    },
+    "category": "Utility",
+    "shortDescription": "Assistant IA vocal J.A.R.V.I.S.",
+    "longDescription": "Assistant IA vocal : cerveau local ou cloud, voix, mémoire, routines, contrôle du bureau et HUD 3D."
+  }
+}

@@ -1,20 +1,15 @@
-import { useRef, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { useRef, useCallback, useEffect } from "react";
 import { useJarvisStore } from "../stores/jarvisStore";
+import { onMicError, startMic, type MicCapture } from "../lib/mic";
+import { isTauri } from "../lib/platform";
 import type { ClientEvent } from "../types";
 
-// Capture audio native via Rust/WASAPI — contourne le bug WebView2 MediaStream→AudioContext
+// Capture native (Rust/cpal) dans l'application, getUserMedia dans le navigateur.
 let _silentChunkCount = 0;
 const SILENT_WARNING_THRESHOLD = 16;
 
-interface AudioChunkPayload {
-  data: number[];
-  sampleRate: number;
-}
-
 export function useAudioCapture(send: (e: ClientEvent) => void) {
-  const unlistenRef = useRef<UnlistenFn | null>(null);
+  const micRef = useRef<MicCapture | null>(null);
   const activeRef = useRef(false);
 
   const startCapture = useCallback(async () => {
@@ -23,11 +18,7 @@ export function useAudioCapture(send: (e: ClientEvent) => void) {
     _silentChunkCount = 0;
 
     try {
-      // Écouter les chunks audio émis par Rust/cpal
-      unlistenRef.current = await listen<AudioChunkPayload>(
-        "jarvis_audio_chunk",
-        (event) => {
-          const { data, sampleRate } = event.payload;
+      micRef.current = await startMic((data, sampleRate) => {
 
           // Anti-écho : quand JARVIS parle (TTS dans les haut-parleurs), le
           // micro capte sa propre voix — ne pas la lui renvoyer à transcrire.
@@ -45,8 +36,9 @@ export function useAudioCapture(send: (e: ClientEvent) => void) {
               useJarvisStore.getState().addMessage({
                 id: crypto.randomUUID(),
                 role: "system",
-                content:
-                  "⚠ Microphone silencieux — aucun son détecté. Vérifie que le bon micro est sélectionné dans Windows.",
+                content: isTauri
+                  ? "⚠ Microphone silencieux — aucun son détecté. Choisis le bon micro dans Paramètres › Voix."
+                  : "⚠ Microphone silencieux — aucun son détecté. Vérifie le micro autorisé pour ce site (icône à gauche de l'adresse).",
                 timestamp: Date.now(),
               });
             }
@@ -55,12 +47,7 @@ export function useAudioCapture(send: (e: ClientEvent) => void) {
           }
 
           send({ type: "audio_chunk", payload: { data, sampleRate } });
-        }
-      );
-
-      // Démarrer la capture WASAPI (retourne le sample rate réel)
-      const sampleRate = await invoke<number>("start_mic");
-      console.log("[JARVIS-AUDIO] Capture WASAPI démarrée — sampleRate:", sampleRate);
+      });
     } catch (err) {
       activeRef.current = false;
       const msg = err instanceof Error ? err.message : String(err);
@@ -75,15 +62,30 @@ export function useAudioCapture(send: (e: ClientEvent) => void) {
     }
   }, [send]);
 
+  // Flux coupé en cours de route (micro débranché, repris par une autre appli) :
+  // on le dit, et on remet le bouton micro dans son état réel.
+  useEffect(() => onMicError((message) => {
+    if (!activeRef.current) return;
+    activeRef.current = false;
+    const mic = micRef.current;
+    micRef.current = null;
+    void mic?.stop();
+    send({ type: "mic_stop", payload: {} });
+    const st = useJarvisStore.getState();
+    st.setMicActive(false);
+    st.addMessage({
+      id: crypto.randomUUID(),
+      role: "system",
+      content: `⚠ Micro interrompu : ${message}. Vérifie le micro choisi dans Paramètres › Voix.`,
+      timestamp: Date.now(),
+    });
+  }), [send]);
+
   const stopCapture = useCallback(async () => {
     activeRef.current = false;
-    unlistenRef.current?.();
-    unlistenRef.current = null;
-    try {
-      await invoke("stop_mic");
-    } catch (_) {
-      // Ignore si déjà arrêté
-    }
+    const mic = micRef.current;
+    micRef.current = null;
+    await mic?.stop();
     send({ type: "mic_stop", payload: {} });
   }, [send]);
 

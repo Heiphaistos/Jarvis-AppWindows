@@ -319,6 +319,9 @@ interface JarvisState {
   stopGeneration: () => void;
   armorFx: boolean;
   setArmorFx: (v: boolean) => void;
+  /** Micro choisi (nom du périphérique natif ou deviceId navigateur), "" = défaut. */
+  micDevice: string;
+  setMicDevice: (v: string) => void;
   theme: ThemeName;
   setTheme: (t: ThemeName) => void;
   customAccent: string;
@@ -389,6 +392,11 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
   metrics: { cpu: 0, ram: 0, gpu: null, vram: null },
   perfActive: "",
   memoryVersion: 0,
+  micDevice: localStorage.getItem("jarvis_mic_device") || "",
+  setMicDevice: (micDevice) => {
+    localStorage.setItem("jarvis_mic_device", micDevice);
+    set({ micDevice });
+  },
   armorFx: localStorage.getItem("jarvis_armor_fx") !== "0",
   setArmorFx: (armorFx) => {
     localStorage.setItem("jarvis_armor_fx", armorFx ? "1" : "0");
@@ -557,6 +565,15 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
           role: "user",
           // Transcription peu sûre : signalée pour que Monsieur voie ce qui a été compris.
           content: event.payload.uncertain ? `${event.payload.text} (?)` : event.payload.text,
+          timestamp: Date.now(),
+        });
+        break;
+
+      case "greeting":
+        addMessage({
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: event.payload.text,
           timestamp: Date.now(),
         });
         break;

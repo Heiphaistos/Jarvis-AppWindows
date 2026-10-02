@@ -5,7 +5,8 @@ import re
 import uuid
 from fastapi import WebSocket, WebSocketDisconnect
 from utils.logger import get_logger
-from utils.config import MODELS_DIR
+from utils.runtime_settings import setting
+from utils.config import MODELS_DIR, settings
 from core.llm import parse_tool_calls, _TOOL_CALL_RE
 from core.memory import ContextMemory
 from core.prompt import build_system_prompt
@@ -20,13 +21,11 @@ _rate_limiter = RateLimiter()
 
 logger = get_logger("websocket")
 
-# Fin de parole par détection de silence — plus de découpage arbitraire qui
-# coupait les phrases en morceaux toutes les ~2,7 s.
-SPEECH_RMS = 0.004          # au-dessus : de la parole est présente (voix faible ~0.009)
-SPEECH_CONFIRM_CHUNKS = 2   # 2 chunks consécutifs pour confirmer (anti-clic)
-SILENCE_CHUNKS_END = 14     # ~1.2 s de silence après parole → transcrire
-PRE_ROLL_CHUNKS = 7         # ~0.6 s gardées avant la parole — 1er mot jamais tronqué
-MAX_UTTERANCE_CHUNKS = 360  # ~30 s : borne dure anti-débordement
+# Fin de parole par détection de silence, mesurée en durée (et non en nombre
+# de morceaux : leur taille varie selon le micro et la fréquence d'échantillonnage).
+# Seuil, délai de silence et durée maximale se règlent dans Paramètres › Voix.
+SPEECH_CONFIRM_S = 0.15     # parole continue avant de la confirmer (anti-clic)
+PRE_ROLL_S = 0.6            # audio gardé avant la parole — 1er mot jamais tronqué
 MAX_PAYLOAD_BYTES = 2 * 1024 * 1024   # 2 MB — audio chunk upper bound
 MAX_TEXT_CHARS = 2000
 ALLOWED_ORIGINS = {
@@ -45,6 +44,7 @@ MAX_AGENT_ITERATIONS = 5
 # reformuler) : la réponse qui suit a besoin d'un vrai cerveau et de place.
 RICH_TOOLS = {"deep_research", "read_webpage", "pc_diagnostic", "pc_health_report"}
 _RICH_MAX_TOKENS = 1536
+_LENGTH_FACTOR = {"short": 0.5, "normal": 1.0, "long": 2.0}
 
 
 def _tool_followup(name: str, args: dict | None, result: str, chain: bool = False) -> str:
@@ -115,6 +115,8 @@ async def _agent_loop(
     else:
         from core.providers.router import MAX_TOKENS
         max_tokens = MAX_TOKENS.get(level, 1024)
+    # Longueur choisie dans les paramètres (Comportement)
+    max_tokens = int(max_tokens * _LENGTH_FACTOR.get(str(setting("assistant.response_length")), 1.0))
     used_tools = False
     first_spoken = False  # 1re phrase déjà envoyée à la synthèse vocale
     lesson_recorded = False
@@ -718,9 +720,11 @@ async def websocket_handler(
     tools: ToolRegistry,
     max_context_messages: int = 20,
 ) -> None:
-    # Origin check — reject connections from unexpected origins
+    # Origin check — reject connections from unexpected origins (en mode web,
+    # le middleware d'accès a déjà validé l'origine ET la session).
+    from api.security import get_access
     origin = ws.headers.get("origin", "")
-    if origin and origin not in ALLOWED_ORIGINS:
+    if origin and not get_access().web and origin not in ALLOWED_ORIGINS:
         logger.warning(f"Origine WebSocket refusée: {origin!r}")
         await ws.close(code=4403, reason="Origin not allowed")
         return
@@ -765,13 +769,15 @@ async def websocket_handler(
     })
 
     # Per-connection memory — no shared state between clients
-    memory = ContextMemory(max_context_messages)
+    memory = ContextMemory(int(setting("chat.context_messages") or max_context_messages))
+    greeted = False
 
     audio_buffer: list[list[float]] = []
     current_sample_rate: int = 16000
     speech_detected: bool = False   # de la parole a été entendue dans le buffer
-    speech_run: int = 0             # chunks de parole consécutifs (confirmation)
-    silence_run: int = 0            # chunks de silence consécutifs
+    speech_run: float = 0.0         # secondes de parole consécutives (confirmation)
+    silence_run: float = 0.0        # secondes de silence consécutives
+    buffered_s: float = 0.0         # durée de l'audio en attente
     tts_enabled: bool = True
     wake_detector = None  # lazy — instancié au 1er wake_audio (modèle stateful par connexion)
     query_task: asyncio.Task | None = None  # requête en cours — annulable via stop_generation
@@ -816,6 +822,7 @@ async def websocket_handler(
             system=build_system_prompt("cloud", ""),
             tools=tools.schemas(),
             voice=voice if voice in GEMINI_VOICES else "Charon",
+            model=setting("live.model"),
         )
         try:
             await live.start()
@@ -909,8 +916,10 @@ async def websocket_handler(
                     chunk_data = payload.get("data")
                     if not isinstance(chunk_data, list):
                         continue
+                    current_sample_rate = int(payload.get("sampleRate", 16000)) or 16000
+                    chunk_s = len(chunk_data) / current_sample_rate
                     audio_buffer.append(chunk_data)
-                    current_sample_rate = int(payload.get("sampleRate", 16000))
+                    buffered_s += chunk_s
                     if len(audio_buffer) == 1:
                         await manager.send(ws, "status", {"status": "listening"})
 
@@ -919,30 +928,31 @@ async def websocket_handler(
                     for _v in chunk_data:
                         _sq += _v * _v
                     _rms = (_sq / max(len(chunk_data), 1)) ** 0.5
-                    if _rms >= SPEECH_RMS:
-                        speech_run += 1
-                        silence_run = 0
-                        if speech_run >= SPEECH_CONFIRM_CHUNKS:
+                    if _rms >= setting("voice.speech_threshold"):
+                        speech_run += chunk_s
+                        silence_run = 0.0
+                        if speech_run >= SPEECH_CONFIRM_S:
                             speech_detected = True
                     else:
-                        speech_run = 0
-                        silence_run += 1
+                        speech_run = 0.0
+                        silence_run += chunk_s
 
                     if not speech_detected:
                         # Pas encore de parole : ne garder qu'un court pré-roll —
                         # jamais des secondes de silence envoyées à Whisper.
-                        if len(audio_buffer) > PRE_ROLL_CHUNKS:
-                            audio_buffer.pop(0)
+                        while len(audio_buffer) > 1 and buffered_s - len(audio_buffer[0]) / current_sample_rate >= PRE_ROLL_S:
+                            buffered_s -= len(audio_buffer.pop(0)) / current_sample_rate
                         continue
 
-                    end_of_speech = silence_run >= SILENCE_CHUNKS_END
-                    overflow = len(audio_buffer) >= MAX_UTTERANCE_CHUNKS
+                    end_of_speech = silence_run * 1000 >= setting("voice.end_silence_ms")
+                    overflow = buffered_s >= setting("voice.max_utterance_s")
                     if end_of_speech or overflow:
                         chunks = list(audio_buffer)
                         audio_buffer.clear()
+                        buffered_s = 0.0
                         speech_detected = False
-                        speech_run = 0
-                        silence_run = 0
+                        speech_run = 0.0
+                        silence_run = 0.0
                         if query_task is not None and not query_task.done():
                             query_task.cancel()
                         query_task = asyncio.create_task(_run_query(transcribe_and_query(
@@ -976,16 +986,18 @@ async def websocket_handler(
                 if not speech_detected:
                     # Que du silence dans le buffer — rien à transcrire
                     audio_buffer.clear()
-                    speech_run = 0
-                    silence_run = 0
+                    buffered_s = 0.0
+                    speech_run = 0.0
+                    silence_run = 0.0
                     await manager.send(ws, "status", {"status": "idle"})
                     continue
                 speech_detected = False
-                speech_run = 0
-                silence_run = 0
+                speech_run = 0.0
+                silence_run = 0.0
                 if audio_buffer and voice_available(stt, providers):
                     chunks = list(audio_buffer)
                     audio_buffer.clear()
+                    buffered_s = 0.0
                     if query_task is not None and not query_task.done():
                         query_task.cancel()
                     query_task = asyncio.create_task(_run_query(transcribe_and_query(
@@ -1020,12 +1032,38 @@ async def websocket_handler(
                         logger.warning(f"Nom de voix Edge invalide: {edge_name!r}")
                 elif voice_id:
                     voice_path = MODELS_DIR / "piper" / f"{voice_id}.onnx"
-                    if voice_path.exists() and (voice_path.parent / "piper.exe").exists():
+                    if voice_path.exists() and settings.piper_exe.exists():
                         tts.set_voice(voice_path)
                     else:
                         # Voix locale absente (installeur sans Piper) : JARVIS restait muet. Repli Henri.
                         logger.warning(f"Voix locale indisponible ({voice_path}) — repli Edge Henri")
                         tts.set_edge_voice("fr-FR-HenriNeural")
+
+            elif event_type == "greet":
+                # Ouverture de l'application : accueil parlé, une fois par connexion.
+                if not greeted and setting("assistant.greeting"):
+                    greeted = True
+                    from core.greeting import build_greeting
+                    text = await asyncio.to_thread(
+                        build_greeting, None, bool(setting("assistant.greeting_briefing")),
+                        str(setting("assistant.user_title")))
+                    memory.add_assistant(text)
+                    await manager.send(ws, "greeting", {"text": text})
+                    if tts_enabled and tts.is_available:
+                        audio = await tts.synthesize(text)
+                        if audio:
+                            await manager.send(ws, "tts_audio", {"audio": audio})
+
+            elif event_type == "preview_voice":
+                # Paramètres › Voix : fait entendre la voix choisie.
+                if tts.is_available:
+                    audio = await tts.synthesize(
+                        "Bonjour Monsieur. Voici ma voix : tous les systèmes sont opérationnels."
+                    )
+                    if audio:
+                        await manager.send(ws, "tts_audio", {"audio": audio})
+                    else:
+                        await manager.send(ws, "error", {"message": "Cette voix n'a rien produit : vérifiez la clé ou la connexion."})
 
             elif event_type == "clear_history":
                 _archive_conversation(providers, memory)

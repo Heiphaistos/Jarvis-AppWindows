@@ -56,9 +56,8 @@ def downgrade_of(name: str) -> str | None:
 
 
 def _config_path() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent / "data" / "perf.json"
-    return Path(__file__).parents[1] / "data" / "perf.json"
+    from utils.paths import data_dir
+    return data_dir() / "perf.json"
 
 
 _active: PerfProfile = PROFILES["max"]

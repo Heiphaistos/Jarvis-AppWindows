@@ -9,8 +9,15 @@ Demarrage rapide :
      automatiquement — une seule fois, reprise possible si interrompu.
      Ensuite tout est 100 % local et hors-ligne.
 
+Panneau web (PC modestes) :
+  - Double-cliquer JARVIS-Web.bat : JARVIS s'ouvre dans le navigateur deja
+    installe, sans fenetre native. Menu (globe, en haut a droite) : demarrer
+    avec Windows, arreter JARVIS. Pour le plus leger : cerveau cloud
+    (Parametres -> Cerveau) et disposition Compact (sans 3D).
+
 Contenu :
   - JARVIS.exe          interface holographique (Tauri)
+  - JARVIS-Web.bat      JARVIS dans le navigateur (panneau web)
   - jarvis_server.exe   serveur IA compile (LLM + voix + micro + outils)
   - models/             Whisper (reconnaissance vocale) + Piper (voix locale)
   - skills/             disciplines de raisonnement Fable

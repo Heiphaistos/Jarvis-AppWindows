@@ -3,7 +3,7 @@
   <p><strong>Assistant IA local style Iron Man — Cerveau multi-API (local ou cloud), wake word « Hey Jarvis », HUD holographique 3D, 51 outils, vision.</strong></p>
 
   ![Version](https://img.shields.io/badge/version-5.4.0-blue)
-  ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?logo=windows)
+  ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20Web-0078D4)
   ![Stack](https://img.shields.io/badge/stack-Tauri%20v2%20%2B%20Python%20FastAPI-purple)
   ![CUDA](https://img.shields.io/badge/CUDA-12.1%2B-76B900?logo=nvidia)
   ![License](https://img.shields.io/badge/licence-MIT-green)
@@ -16,6 +16,15 @@
 J.A.R.V.I.S. (*Just A Rather Very Intelligent System*) est un assistant IA local inspiré de l'Iron Man de Marvel. Par défaut il tourne sans aucune connexion cloud : le LLM Mistral-7B Q4 est exécuté localement via CUDA, la reconnaissance vocale (STT) et la synthèse vocale (TTS) sont assurées par Faster-Whisper et Piper. Depuis la v4.0, le cerveau est interchangeable : n'importe quelle API compatible OpenAI (OpenAI, Gemini, Ollama, Groq, DeepSeek, xAI, OpenRouter, Mistral, LM Studio, vLLM…) ou l'API Anthropic native peut prendre le relais, avec bascule automatique sur le cerveau local en cas de panne. Une boucle agent « Fable » (réflexion → outils → vérification) enchaîne jusqu'à 5 appels d'outils par message, guidée par 6 disciplines de raisonnement routées par intention, avec mémoire persistante et journal de leçons SQLite entre les sessions.
 
 ---
+
+## Nouveautés 5.4 — version web, panneau web local, Linux
+
+- **Panneau web local** (comme NiTriTe Agent) : `jarvis_server --web` (ou `JARVIS-Web.bat` dans le portable) fait tourner JARVIS sur le PC **sans fenêtre native** ; l'interface s'ouvre dans le navigateur déjà installé, déjà connectée. Même JARVIS, mêmes outils, une WebView en moins. Menu 🌐 : démarrer avec la session, arrêter JARVIS. Accès réservé à l'onglet ouvert par JARVIS : clé de 256 bits dans le fragment de l'URL échangée contre un cookie `HttpOnly`, vérification du Host (DNS rebinding) et de l'origine. Options `--app` (fenêtre Edge/Chrome sans onglets), `--lan`, `--port`, `--no-browser`.
+- **Version web hébergée** : `deploy/web/` (Docker + nginx) pour l'installer sur un VPS en HTTPS, avec mot de passe. Cerveaux, voix et transcription dans le cloud ; les 27 outils qui agiraient sur la machine (fenêtres, fichiers, NiTriTe…) y sont retirés. Mesuré : **≈ 50 Mo de RAM au repos, ≈ 64 Mo avec 10 sessions vocales, image de 351 Mo**. Interface utilisable sur téléphone. Détails et chiffres : [`docs/WEB.md`](docs/WEB.md).
+- **Linux** : application de bureau (.deb, .AppImage, .rpm) et serveur. Outils adaptés : applications (équivalents Linux de Chrome, Bloc-notes, Explorateur, Calculatrice, Terminal…), capture d'écran (gnome-screenshot, Spectacle, grim, scrot), presse-papiers (wl-clipboard, xclip), volume (PipeWire, PulseAudio, ALSA), batterie, ping, journal système (journald), multimédia via MPRIS (playerctl), contrôle des fenêtres et du clavier via xdotool et wmctrl (session X11). Données dans `~/.local/share/JARVIS`. Build : `scripts/build-linux.sh` ou la CI GitHub.
+- **Interface dans le navigateur** : micro via le navigateur (ré-échantillonné en 16 kHz avant l'envoi : trois fois moins de données), adresses du serveur relatives, barre de titre adaptée.
+- **Sécurité de l'application** : le WebSocket vérifiait déjà l'origine ; c'est maintenant le cas de toute l'API en écriture. Un site ouvert dans le navigateur pouvait par exemple remplacer le fichier d'identifiants Gmail (un envoi de fichier échappe au contrôle CORS du navigateur).
+- **Corrections** : identifiants Gmail perdus à chaque arrêt de l'exécutable compilé (ils étaient rangés dans le dossier temporaire de PyInstaller) ; sans voix locale Piper, JARVIS restait muet : il prend maintenant la voix en ligne Henri ; retour OAuth Gmail sur le bon port ou la bonne adresse publique.
 
 ## Nouveautés 5.2 — diagnostic NiTriTe, contrôle du PC, voix fiable
 
@@ -79,7 +88,8 @@ J.A.R.V.I.S. (*Just A Rather Very Intelligent System*) est un assistant IA local
 
 | Couche | Technologies |
 |--------|-------------|
-| Desktop | Tauri v2 + Rust |
+| Desktop | Tauri v2 + Rust (Windows, Linux) |
+| Web | panneau local (`--web`) ou version hébergée Docker (`deploy/web/`) |
 | Frontend | React 19 + TypeScript + Tailwind CSS + Framer Motion + three.js/R3F |
 | Backend | Python 3.12 + FastAPI + WebSocket |
 | LLM | Mistral-7B local (défaut) · Anthropic · toute API OpenAI-compatible |
@@ -93,7 +103,7 @@ J.A.R.V.I.S. (*Just A Rather Very Intelligent System*) est un assistant IA local
 
 ## Prérequis
 
-- **Windows 10/11 x64**
+- **Windows 10/11 x64** ou **Linux x86-64** (Ubuntu 22.04+, Debian 12+, Fedora…)
 - **GPU NVIDIA** avec CUDA >= 12.1 (RTX 3070+ recommandé, 8 GB VRAM minimum)
 - **Python 3.10–3.12**
 - **Node.js 18+**
@@ -156,6 +166,24 @@ npx tauri build
 ```
 
 Le script `LANCER-JARVIS.bat` démarre automatiquement le serveur Python puis l'interface.
+
+### Linux
+
+```bash
+./scripts/build-linux.sh          # → client/src-tauri/target/release/bundle/{deb,appimage,rpm}
+LOCAL_LLM=0 ./scripts/build-linux.sh   # sans cerveau local (build rapide, cerveaux cloud)
+```
+
+Contrôle des fenêtres et du clavier : `sudo apt install xdotool wmctrl` (session X11). Presse-papiers : `wl-clipboard` (Wayland) ou `xclip`. Multimédia : `playerctl`.
+
+### Panneau web et version hébergée
+
+```bash
+cd server && python main.py --web          # panneau web local (après npm run build dans client/)
+docker compose -f deploy/web/docker-compose.yml up -d --build   # version hébergée (VPS)
+```
+
+Voir [`docs/WEB.md`](docs/WEB.md).
 
 ---
 

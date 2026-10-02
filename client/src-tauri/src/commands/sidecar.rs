@@ -1,6 +1,7 @@
 use std::hash::BuildHasher;
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime};
@@ -11,8 +12,14 @@ use std::os::windows::process::CommandExt;
 
 const ADDR: &str = "127.0.0.1:8765";
 
-/// Serveur lancé par JARVIS + jeton qui l'autorise à demander son arrêt propre.
-pub struct SidecarState(pub Mutex<Option<(Child, String)>>);
+/// Serveur lancé par JARVIS (+ jeton qui l'autorise à demander son arrêt propre)
+/// et dossier des ressources du bundle.
+pub struct SidecarState(pub Mutex<Option<(Child, String)>>, pub Mutex<Option<PathBuf>>);
+
+#[cfg(windows)]
+const SERVER_BIN: &str = "jarvis_server.exe";
+#[cfg(not(windows))]
+const SERVER_BIN: &str = "jarvis_server";
 
 /// True if something is already listening on 127.0.0.1:8765
 fn is_server_running() -> bool {
@@ -30,22 +37,45 @@ fn wait_until(timeout: Duration, mut done: impl FnMut() -> bool) -> bool {
     done()
 }
 
-/// Serveur Python compilé (PyInstaller), livré à côté de JARVIS.exe : ressource
-/// du bundle (installeur, remplacée à chaque mise à jour) ou fichier du zip portable.
-fn server_exe() -> Result<std::path::PathBuf, String> {
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let dir = exe.parent().ok_or("Impossible de trouver le dossier de JARVIS.exe")?;
-    let server_path = dir.join("jarvis_server.exe");
-    if !server_path.exists() {
-        return Err(format!("{} introuvable", server_path.display()));
-    }
-    Ok(server_path)
+fn exe_dir() -> Option<PathBuf> {
+    Some(std::env::current_exe().ok()?.parent()?.to_path_buf())
 }
 
-/// Chemin du dossier models/ à côté de JARVIS.exe
-fn models_dir() -> Option<std::path::PathBuf> {
-    let exe = std::env::current_exe().ok()?;
-    Some(exe.parent()?.join("models"))
+/// Serveur Python compilé (PyInstaller) : ressource du bundle (installeur,
+/// .deb, AppImage — remplacée à chaque mise à jour) ou fichier du zip portable,
+/// à côté de l'exécutable.
+fn server_exe(resource_dir: Option<&Path>) -> Result<PathBuf, String> {
+    let candidates: Vec<PathBuf> = resource_dir
+        .into_iter()
+        .map(Path::to_path_buf)
+        .chain(exe_dir())
+        .map(|d| d.join(SERVER_BIN))
+        .collect();
+    candidates
+        .iter()
+        .find(|p| p.is_file())
+        .cloned()
+        .ok_or_else(|| match candidates.first() {
+            Some(p) => format!("{SERVER_BIN} introuvable ({})", p.display()),
+            None => format!("{SERVER_BIN} introuvable"),
+        })
+}
+
+/// Dossier models/ : à côté de JARVIS.exe sous Windows (portable, installeur
+/// utilisateur) ; sous Linux l'application est en lecture seule (/usr, AppImage)
+/// → ~/.local/share/JARVIS/models.
+fn models_dir() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        Some(exe_dir()?.join("models"))
+    }
+    #[cfg(not(windows))]
+    {
+        let base = std::env::var_os("XDG_DATA_HOME")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))?;
+        Some(base.join("JARVIS").join("models"))
+    }
 }
 
 /// Jeton aléatoire (RandomState est semé par l'OS) : seul JARVIS peut arrêter son serveur.
@@ -103,10 +133,10 @@ mod job {
 
 /// Une seule instance de JARVIS : toute instance de jarvis_server.exe trouvée au
 /// démarrage est donc l'orphelin d'une session précédente (ancienne version, plantage).
+#[cfg(windows)]
 fn kill_orphan_servers() {
     let mut cmd = Command::new("taskkill");
-    cmd.args(["/F", "/T", "/IM", "jarvis_server.exe"]);
-    #[cfg(windows)]
+    cmd.args(["/F", "/T", "/IM", SERVER_BIN]);
     cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     let _ = cmd.output();
 }
@@ -119,6 +149,7 @@ pub fn launch_server(state: &SidecarState) -> Result<(), String> {
     }
 
     if is_server_running() {
+        #[cfg(windows)]
         kill_orphan_servers();
         if !wait_until(Duration::from_secs(6), || !is_server_running()) {
             // Port tenu par autre chose qu'un jarvis_server.exe (serveur de dev python main.py) : on le réutilise.
@@ -126,21 +157,24 @@ pub fn launch_server(state: &SidecarState) -> Result<(), String> {
         }
     }
 
-    let server_exe = server_exe()?;
+    let resource_dir = state.1.lock().map_err(|e| e.to_string())?.clone();
+    let server_exe = server_exe(resource_dir.as_deref())?;
+
     let token = new_token();
     let mut cmd = Command::new(&server_exe);
     cmd.env("JARVIS_SHUTDOWN_TOKEN", &token);
 
     // Indique au serveur où trouver les modèles
     if let Some(models) = models_dir() {
+        let _ = std::fs::create_dir_all(&models);
         cmd.env("JARVIS_MODELS_DIR", models.to_string_lossy().as_ref());
     }
 
-    // Répertoire de travail = dossier de JARVIS.exe
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            cmd.current_dir(dir);
-        }
+    // Répertoire de travail = dossier de JARVIS.exe (Windows) ; sous Linux le
+    // serveur range ses données dans ~/.local/share/JARVIS.
+    #[cfg(windows)]
+    if let Some(dir) = exe_dir() {
+        cmd.current_dir(dir);
     }
 
     #[cfg(windows)]
@@ -148,7 +182,7 @@ pub fn launch_server(state: &SidecarState) -> Result<(), String> {
 
     let child = cmd
         .spawn()
-        .map_err(|e| format!("Impossible de démarrer jarvis_server: {e}"))?;
+        .map_err(|e| format!("Impossible de démarrer {SERVER_BIN}: {e}"))?;
     // Le chargeur PyInstaller décompresse ~1,4 Go avant de créer son processus Python :
     // rattaché ici, cet enfant hérite du job.
     #[cfg(windows)]

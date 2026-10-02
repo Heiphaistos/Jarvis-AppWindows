@@ -43,7 +43,8 @@ def _session_path() -> Path | None:
 
 def session() -> dict | None:
     """Session de l'agent en cours (port, jeton), ou None s'il ne tourne pas."""
-    override = os.environ.get("JARVIS_NITRITE_SESSION")
+    from utils.runtime_settings import setting
+    override = setting("nitrite.session_path")
     path = Path(override) if override else _session_path()
     if path is None or not path.is_file():
         return None
@@ -99,7 +100,8 @@ def invoke(command: str, args: dict | None = None):
 
 def find_agent_exe() -> Path | None:
     """NiTriTe-Agent*.exe : JARVIS_NITRITE_AGENT, sinon emplacements habituels."""
-    override = os.environ.get("JARVIS_NITRITE_AGENT")
+    from utils.runtime_settings import setting
+    override = setting("nitrite.agent_path")
     if override:
         p = Path(override)
         return p if p.is_file() else None
@@ -124,7 +126,7 @@ def start_agent(wait_s: float = 20.0) -> str:
     exe = find_agent_exe()
     if exe is None:
         return ("NiTriTe-Agent.exe introuvable. Téléchargez-le depuis les releases du dépôt "
-                "Nitrite-We-Panel, ou indiquez son chemin dans JARVIS_NITRITE_AGENT.")
+                "Nitrite-We-Panel, ou indiquez son chemin dans Paramètres › Moteurs.")
     # ShellExecute : déclenche la demande d'élévation UAC voulue par l'agent.
     subprocess.Popen(
         ["powershell", "-NoProfile", "-Command",
