@@ -1020,10 +1020,12 @@ async def websocket_handler(
                         logger.warning(f"Nom de voix Edge invalide: {edge_name!r}")
                 elif voice_id:
                     voice_path = MODELS_DIR / "piper" / f"{voice_id}.onnx"
-                    if voice_path.exists():
+                    if voice_path.exists() and (voice_path.parent / "piper.exe").exists():
                         tts.set_voice(voice_path)
                     else:
-                        logger.warning(f"Voix introuvable: {voice_path}")
+                        # Voix locale absente (installeur sans Piper) : JARVIS restait muet. Repli Henri.
+                        logger.warning(f"Voix locale indisponible ({voice_path}) — repli Edge Henri")
+                        tts.set_edge_voice("fr-FR-HenriNeural")
 
             elif event_type == "clear_history":
                 _archive_conversation(providers, memory)

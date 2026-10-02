@@ -329,6 +329,8 @@ code, pre, .font-mono { font-family: var(--font-mono); }
 .stage[data-layout="immersive"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "chips" "chat"; }
 .stage[data-layout="immersive"] .core { position: absolute; inset: 0; }
 .stage[data-layout="immersive"] .chat { width: min(780px, 100%); height: min(46vh, 100%); min-height: 300px; justify-self: center; align-self: end; }
+/* Accueil (aucun message) : le panneau prend la hauteur des suggestions au lieu de les faire defiler. */
+.stage[data-layout="immersive"] .chat:has(.welcome) { height: auto; max-height: 100%; }
 .stage[data-layout="immersive"] .core-arcs { position: absolute; inset: 8px; pointer-events: none; opacity: 0.8; }
 [data-skin="minimal"] .core-arcs { opacity: 0.35; }
 .core-caption {
@@ -413,13 +415,16 @@ code, pre, .font-mono { font-family: var(--font-mono); }
 .mic.is-on { color: var(--green); border-color: var(--green); box-shadow: 0 0 50px rgba(0, 255, 136, 0.55); animation: mic-pulse 1.2s ease-in-out infinite; }
 @keyframes mic-pulse { 50% { box-shadow: 0 0 80px rgba(0, 255, 136, 0.8); } }
 .core-hint { position: absolute; bottom: 14px; z-index: 2; font-size: 14px; color: var(--ink-mute); text-align: center; padding: 0 12px; }
-.side { display: flex; flex-direction: column; overflow: hidden; }
+.side { display: flex; flex-direction: column; overflow: hidden auto; }
 .side .core { flex: 1; min-height: 250px; }
 .side .mic { bottom: 38px; width: 56px; height: 56px; }
 .side .mic svg { width: 22px; height: 22px; }
 .side .core-hint { bottom: 10px; font-size: 13px; }
 .side .core-stage { top: 52px; bottom: 100px; }
 .side-foot { padding: 14px 16px 16px; display: grid; gap: 12px; border-top: 1px solid var(--line-soft); }
+/* Duo en fenetre basse : l'hologramme cede de la place pour que le pied (avertissements, voix) reste entier. */
+@media (max-height: 760px) { .side .core { min-height: 180px; } }
+.stage[data-layout="immersive"] .core-status { top: 58px; }
 
 .stat-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
@@ -451,17 +456,24 @@ code, pre, .font-mono { font-family: var(--font-mono); }
   filter: drop-shadow(0 0 calc(24px * var(--glow)) rgb(var(--accent-rgb) / 0.35));
 }
 .welcome p { color: var(--ink-soft); }
-.welcome-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; width: min(560px, 100%); }
+.welcome-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 10px; width: min(560px, 100%); }
 .welcome-card {
-  display: flex; align-items: center; gap: 12px; padding: 13px 15px; border-radius: var(--radius-sm); text-align: left; font-size: 14.5px;
+  display: flex; align-items: center; gap: 12px; min-width: 0; padding: 13px 15px; border-radius: var(--radius-sm); text-align: left; font-size: 14.5px; overflow-wrap: anywhere;
   color: var(--ink-soft); border: 1px solid var(--line); background: rgb(var(--accent-rgb) / 0.04); transition: all 0.25s var(--ease-out);
 }
 .welcome-card svg { width: 18px; height: 18px; color: var(--accent); flex: none; }
+/* Fenetres basses : accueil resserre pour que les 5 suggestions tiennent sans defiler. */
+@media (max-height: 940px) {
+  .welcome { gap: 12px; padding: 10px 4px; }
+  .welcome-grid { gap: 8px; }
+  .welcome-card { padding: 9px 12px; font-size: 13.5px; line-height: 1.35; }
+}
+@media (max-height: 680px) { .welcome .eyebrow { display: none; } .welcome h2 { font-size: 22px; } .welcome-grid { gap: 6px; } .welcome-card { padding: 7px 11px; } [data-skin="tactical"] .welcome-card { font-size: 12.5px; } }
 .welcome-card:not(:disabled):hover { color: #fff; border-color: var(--accent); background: rgb(var(--accent-rgb) / 0.12); translate: 0 -2px; }
 .welcome-card:disabled { opacity: 0.4; cursor: default; }
 
-.suggestions { display: flex; gap: 8px; overflow-x: auto; padding: 10px 16px 0; scrollbar-width: none; flex: none; }
-.suggestions::-webkit-scrollbar { display: none; }
+/* Actions rapides : passent a la ligne (jamais rognees par le bord du panneau). */
+.suggestions { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px 0; flex: none; }
 .suggestions button { flex: none; display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px; border-radius: var(--pill); border: 1px solid var(--line); background: rgb(var(--accent-rgb) / 0.05); font-size: 14px; color: var(--ink-soft); transition: all 0.2s; }
 .suggestions button svg { width: 14px; height: 14px; color: var(--accent); }
 .suggestions button:hover { color: #fff; border-color: var(--accent); background: rgb(var(--accent-rgb) / 0.14); }
@@ -490,7 +502,7 @@ code, pre, .font-mono { font-family: var(--font-mono); }
 .input-pill .icon-btn.on-green { color: var(--green); background: rgba(0, 255, 136, 0.14); }
 .chat-input .btn { height: 48px; }
 
-.agent-steps { display: flex; align-items: center; gap: 10px; margin: 10px 16px 0; padding: 7px 12px; border-radius: var(--radius-sm); overflow-x: auto; border: 1px solid var(--line-soft); background: rgb(var(--accent-rgb) / 0.04); flex: none; scrollbar-width: none; }
+.agent-steps { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 10px 16px 0; padding: 7px 12px; border-radius: var(--radius-sm); border: 1px solid var(--line-soft); background: rgb(var(--accent-rgb) / 0.04); flex: none; }
 .step { display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 11px; white-space: nowrap; color: var(--c); flex: none; }
 .step svg { width: 13px; height: 13px; }
 .step-sep { color: var(--ink-mute); }
@@ -506,7 +518,7 @@ code, pre, .font-mono { font-family: var(--font-mono); }
 }
 .modal-head { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 14px 14px 14px 22px; border-bottom: 1px solid var(--line-soft); }
 .modal-head h2 { font-family: var(--font-display); font-size: 13px; letter-spacing: 0.24em; font-weight: 700; color: #fff; }
-.modal-tabs { flex: none; display: flex; gap: 4px; padding: 10px 14px; border-bottom: 1px solid var(--line-soft); overflow-x: auto; scrollbar-width: none; }
+.modal-tabs { flex: none; display: flex; flex-wrap: wrap; gap: 4px; padding: 10px 14px; border-bottom: 1px solid var(--line-soft); }
 .modal-tabs button { display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px; border-radius: var(--pill); font-size: 13px; font-weight: 600; color: var(--ink-mute); white-space: nowrap; transition: all 0.2s; }
 .modal-tabs button svg { width: 15px; height: 15px; }
 .modal-tabs button:hover { color: var(--ink); background: rgba(255, 255, 255, 0.05); }

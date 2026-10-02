@@ -33,7 +33,7 @@ from core.tts import TTSManager
 from core.monitor import run_monitor as _run_monitor
 from tools.registry import ToolRegistry
 from api.routes import router
-from api.websocket import websocket_handler
+from api.websocket import websocket_handler, ALLOWED_ORIGINS
 
 logger = get_logger("main")
 
@@ -260,10 +260,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("JARVIS arrêté.")
 
 
-app = FastAPI(title="JARVIS Core", version="5.3.2", lifespan=lifespan)
+uvicorn_server = None  # uvicorn.Server, posé au lancement
+
+app = FastAPI(title="JARVIS Core", version="5.4.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:1420", "http://127.0.0.1:1420", "tauri://localhost"],
+    # Meme liste que le WebSocket : sans http://tauri.localhost (origine de l'app Tauri v2 compilee),
+    # toutes les requetes REST de l'exe etaient bloquees (onglet Cerveau en chargement infini, voix, telemetrie).
+    allow_origins=sorted(ALLOWED_ORIGINS),
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
 )
@@ -288,11 +292,13 @@ if __name__ == "__main__":
             sys.stdout = io.StringIO()
         if sys.stderr is None:
             sys.stderr = io.StringIO()
-    uvicorn.run(
+    # Serveur gardé en variable : POST /api/shutdown (jeton de JARVIS.exe) demande un arrêt propre.
+    uvicorn_server = uvicorn.Server(uvicorn.Config(
         app,
         host=settings.host,
         port=settings.port,
         log_config=None,  # évite la config logging d'uvicorn qui appelle isatty()
         ws_ping_interval=20,
         ws_ping_timeout=30,
-    )
+    ))
+    uvicorn_server.run()

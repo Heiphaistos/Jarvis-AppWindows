@@ -92,19 +92,48 @@ export function ProvidersTab() {
   const [baseUrl, setBaseUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   const refresh = useCallback(() => {
-    fetch(API)
-      .then((r) => r.json())
-      .then((d: ProvidersStatus) => setStatus(d))
-      .catch(() => setError("Serveur injoignable"));
+    setError("");
+    // Delai borne : jamais de chargement infini si le serveur ne repond pas.
+    fetch(API, { signal: AbortSignal.timeout(8000) })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const d = (await r.json()) as ProvidersStatus;
+        if (!Array.isArray(d.providers)) throw new Error("réponse inattendue");
+        setStatus(d);
+      })
+      .catch((e: Error) =>
+        setError(e.name === "TimeoutError"
+          ? "Le serveur JARVIS ne répond pas (délai de 8 s dépassé)."
+          : `Impossible de lire les cerveaux : ${e.message || "serveur injoignable"}.`));
   }, []);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
+  /** Enregistre la saisie puis fait repondre le cerveau pour de vrai (cle, modele, URL). */
+  const testProvider = async (name: string) => {
+    setTestResult(null);
+    if (!(await submit(name, false))) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/${encodeURIComponent(name)}/test`, { method: "POST", signal: AbortSignal.timeout(25000) });
+      const d = (await r.json()) as { ok: boolean; ms?: number; reply?: string; error?: string };
+      setTestResult(d.ok
+        ? { ok: true, text: `Répond en ${d.ms} ms : « ${d.reply || "…"} »` }
+        : { ok: false, text: d.error || "Échec du test" });
+    } catch {
+      setTestResult({ ok: false, text: "Le serveur JARVIS ne répond pas." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const openEditor = (p: ProviderInfo) => {
+    setTestResult(null);
     setSelected(p.name);
     setApiKey("");
     setModel(p.model);
@@ -130,6 +159,7 @@ export function ProvidersTab() {
       const data = await res.json();
       if (!res.ok) {
         setError(String(data.detail ?? "Erreur de configuration"));
+        return false;
       } else {
         const next = data as ProvidersStatus;
         setStatus(next);
@@ -143,12 +173,23 @@ export function ProvidersTab() {
           });
         }
       }
+      return true;
     } catch {
       setError("Serveur injoignable");
+      return false;
     } finally {
       setBusy(false);
     }
   };
+
+  if (!status && error) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-6 text-[11px] text-red-400 text-center">
+        {error}
+        <button className="btn btn-ghost btn-sm" onClick={refresh}>Réessayer</button>
+      </div>
+    );
+  }
 
   if (!status) {
     return (
@@ -276,6 +317,14 @@ export function ProvidersTab() {
                     </button>
                     <button
                       disabled={busy}
+                      onClick={() => void testProvider(p.name)}
+                      className="flex-1 py-1.5 rounded text-[9px] tracking-widest transition-all disabled:opacity-40"
+                      style={{ border: "1px solid rgb(var(--accent-rgb) / 0.25)", color: "rgb(var(--accent-rgb) / 0.8)" }}
+                    >
+                      TESTER
+                    </button>
+                    <button
+                      disabled={busy}
                       onClick={() => void submit(p.name, true)}
                       className="flex-1 py-1.5 rounded text-[9px] tracking-widest font-bold transition-all disabled:opacity-40"
                       style={{ background: "rgb(var(--accent-rgb) / 0.12)", border: "1px solid rgb(var(--accent-rgb) / 0.4)", color: "var(--accent)" }}
@@ -283,6 +332,9 @@ export function ProvidersTab() {
                       {busy ? "…" : "ACTIVER"}
                     </button>
                   </div>
+                  {testResult && (
+                    <div className={`text-[9px] px-1 ${testResult.ok ? "text-green-400" : "text-red-400"}`}>{testResult.text}</div>
+                  )}
                 </div>
               )}
             </div>

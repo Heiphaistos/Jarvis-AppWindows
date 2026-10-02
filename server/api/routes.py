@@ -40,6 +40,23 @@ async def health(request: Request) -> HealthResponse:
     return HealthResponse(status="ok", version=request.app.version)
 
 
+@router.post("/shutdown")
+async def shutdown(request: Request) -> dict:
+    """Arrêt propre demandé par JARVIS.exe à sa fermeture. Exige le jeton qu'il a passé
+    au lancement (JARVIS_SHUTDOWN_TOKEN) : une page web ne peut pas éteindre le serveur."""
+    import hmac
+    import os
+    expected = os.environ.get("JARVIS_SHUTDOWN_TOKEN", "")
+    given = request.headers.get("x-jarvis-token", "")
+    if not expected or not hmac.compare_digest(given, expected):
+        raise HTTPException(status_code=403, detail="Jeton invalide")
+    import main  # lazy — main est déjà chargé
+    if main.uvicorn_server is not None:
+        main.uvicorn_server.should_exit = True
+    logger.info("Arrêt demandé par JARVIS.exe")
+    return {"status": "stopping"}
+
+
 @router.get("/memories/count")
 async def memories_count() -> dict:
     try:
@@ -176,6 +193,31 @@ async def providers_configure(req: ProviderConfigRequest) -> dict:
         if error:
             raise HTTPException(status_code=400, detail=error)
     return pm.status()
+
+@router.post("/providers/{name}/test")
+async def providers_test(name: str) -> dict:
+    """Essai reel d'un cerveau configure (cle, modele, URL) : une reponse tres courte, delai 20 s."""
+    import time
+    from core.providers import get_provider_manager
+    provider = get_provider_manager().resolve(name)
+    if provider is None or not provider.is_available:
+        return {"ok": False, "error": "Cerveau non configuré (clé API ou modèle manquant)."}
+    t0 = time.monotonic()
+
+    async def _first_words() -> str:
+        out = ""
+        async for tok in provider.stream("Réponds en un mot.", [{"role": "user", "content": "Dis OK."}], max_tokens=8):
+            out += tok
+        return out
+
+    try:
+        reply = await asyncio.wait_for(_first_words(), timeout=20)
+    except asyncio.TimeoutError:
+        return {"ok": False, "error": "Pas de réponse en 20 s."}
+    except Exception as e:  # clé refusée, quota, réseau : message lisible, sans trace
+        return {"ok": False, "error": str(e)[:300] or type(e).__name__}
+    return {"ok": True, "ms": int((time.monotonic() - t0) * 1000), "reply": reply.strip()[:80]}
+
 
 # ── Gmail OAuth ─────────────────────────────────────────────────────────────
 

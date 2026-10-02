@@ -252,6 +252,8 @@ class TTSManager:
                     input=text.encode("utf-8"),
                     capture_output=True,
                     timeout=30,
+                    # Serveur sans console : sans ce drapeau, chaque phrase Piper ouvre une fenêtre noire.
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 )
                 if proc.returncode != 0:
                     raise RuntimeError(f"Piper error: {proc.stderr.decode()}")
