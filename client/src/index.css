@@ -359,6 +359,9 @@ code, pre, .font-mono { font-family: var(--font-mono); }
 /* ── Rail de télémétrie ─────────────────────────────────────────────────────── */
 
 .rail { padding: 20px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+/* Le rail défile lui-même : à -1px, les coins ::before/::after dépassaient d'1px et faisaient naître deux barres de défilement. */
+.rail.panel::before { top: 0; left: 0; }
+.rail.panel::after { bottom: 0; right: 0; }
 .rail-title { font-family: var(--font-display); font-size: 10.5px; letter-spacing: 0.3em; color: var(--accent); font-weight: 600; text-transform: uppercase; }
 .gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 8px; }
 .gauges.row { grid-template-columns: repeat(4, 1fr); }
