@@ -2,7 +2,7 @@
   <h1>J.A.R.V.I.S.</h1>
   <p><strong>Assistant IA local style Iron Man — Cerveau multi-API (local ou cloud), wake word « Hey Jarvis », HUD holographique 3D, 51 outils, vision.</strong></p>
 
-  ![Version](https://img.shields.io/badge/version-5.5.1-blue)
+  ![Version](https://img.shields.io/badge/version-5.6.0-blue)
   ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20Web-0078D4)
   ![Stack](https://img.shields.io/badge/stack-Tauri%20v2%20%2B%20Python%20FastAPI-purple)
   ![CUDA](https://img.shields.io/badge/CUDA-12.1%2B-76B900?logo=nvidia)
@@ -16,6 +16,19 @@
 J.A.R.V.I.S. (*Just A Rather Very Intelligent System*) est un assistant IA local inspiré de l'Iron Man de Marvel. Par défaut il tourne sans aucune connexion cloud : le LLM Mistral-7B Q4 est exécuté localement via CUDA, la reconnaissance vocale (STT) et la synthèse vocale (TTS) sont assurées par Faster-Whisper et Piper. Depuis la v4.0, le cerveau est interchangeable : n'importe quelle API compatible OpenAI (OpenAI, Gemini, Ollama, Groq, DeepSeek, xAI, OpenRouter, Mistral, LM Studio, vLLM…) ou l'API Anthropic native peut prendre le relais, avec bascule automatique sur le cerveau local en cas de panne. Une boucle agent « Fable » (réflexion → outils → vérification) enchaîne jusqu'à 5 appels d'outils par message, guidée par 6 disciplines de raisonnement routées par intention, avec mémoire persistante et journal de leçons SQLite entre les sessions.
 
 ---
+
+## Nouveautés 5.6 — mise à jour automatique
+
+- **Mise à jour intégrée** (Windows et AppImage) : au démarrage JARVIS cherche une nouvelle version sur les releases GitHub, affiche la version et les notes, puis télécharge, vérifie la signature (minisign), installe silencieusement et relance l'application. Le serveur Python et les voix sont des ressources du même installeur : tout est mis à jour ensemble.
+- **Réglages > Voix > Mises à jour** : interrupteur « Vérifier les mises à jour automatiquement » (actif par défaut) et bouton « Rechercher une mise à jour ». Aucune vérification en développement ni dans le panneau web.
+
+### Publier une version (mainteneur)
+
+1. Clé de signature : `D:\MDP\jarvis-updater.key` (hors dépôt, sans mot de passe). La clé publique est dans `client/src-tauri/tauri.conf.json`. Pour la CI Linux, créer le secret de dépôt `TAURI_SIGNING_PRIVATE_KEY` avec le contenu du fichier.
+2. Windows : `scriptsuild.ps1` construit l'installeur signé et génère `latest.json` dans `client\src-tauri	argeteleaseundle
+sis\`.
+3. Créer la release GitHub `vX.Y.Z` avec `JARVIS_X.Y.Z_x64-setup.exe`, son `.sig` et `latest.json`. L'adresse interrogée est `https://github.com/Heiphaistos/Jarvis-AppWindows/releases/latest/download/latest.json`.
+4. Linux : la CI publie `.deb`, `.rpm`, `.AppImage` et `.AppImage.sig` sur la release ; `latest.json` ne couvre pour l'instant que Windows.
 
 ## Nouveautés 5.5 — version web, panneau web local, Linux
 
