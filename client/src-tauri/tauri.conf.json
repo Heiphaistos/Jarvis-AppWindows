@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "JARVIS",
-  "version": "5.5.1",
+  "version": "5.6.0",
   "identifier": "com.jarvis.assistant",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -54,6 +54,18 @@
       "../../server/models/piper/fr_FR-upmc-medium.onnx.json": "models/piper/fr_FR-upmc-medium.onnx.json",
       "../../server/models/piper/espeak-ng-data/": "models/piper/espeak-ng-data/",
       "../../server/skills/": "skills/"
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVFRUM1NjVGNkM1MzlDQzMKUldURG5GTnNYMWJzWHM4UmlMTVRYR095WVlhM3JFaGNCRUY4aVh4UVo3YmlJVE44NTgrWDZxMTUK",
+      "endpoints": [
+        "https://github.com/Heiphaistos/Jarvis-AppWindows/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

@@ -42,8 +42,12 @@ pub fn run() {
     if already_running() {
         return;
     }
-    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
+    let builder = tauri::Builder::default().plugin(tauri_plugin_opener::init());
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let builder = builder
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init());
+    builder
         .manage(SidecarState(Mutex::new(None), Mutex::new(None)))
         .manage(AudioStateInner(Mutex::new(None)))
         .setup(|app| {

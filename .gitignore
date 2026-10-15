@@ -55,3 +55,7 @@ client/src-tauri/resources/
 .vscode/
 *.suo
 *.user
+
+# Cles de signature des mises a jour
+*.key
+*.key.pub

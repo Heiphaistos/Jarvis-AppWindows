@@ -11,6 +11,7 @@ import { CoreStage } from "./components/Shell/CoreStage";
 import { TelemetryRail, SideFooter, StatChips } from "./components/Shell/Telemetry";
 import { useThemeVars } from "./components/Shell/theme";
 import { useJarvis } from "./hooks/useJarvis";
+import { UpdateDialog, useStartupUpdateCheck } from "./components/Update/Update";
 import { useJarvisStore } from "./stores/jarvisStore";
 
 type Jarvis = ReturnType<typeof useJarvis>;
@@ -43,6 +44,7 @@ function ChatColumn({ jarvis }: { jarvis: Jarvis }) {
 
 export default function App() {
   useThemeVars();
+  useStartupUpdateCheck();
   const jarvis = useJarvis();
   const layout = useJarvisStore((s) => s.layout);
   const side = useJarvisStore((s) => s.layoutSide);
@@ -92,6 +94,7 @@ export default function App() {
       </main>
       {layout === "compact" && <VoiceOrb />}
       <BootSequence />
+      <UpdateDialog />
     </div>
   );
 }

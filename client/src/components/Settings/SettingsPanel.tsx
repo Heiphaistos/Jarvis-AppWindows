@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Settings, X, Volume2, Globe, Mail, CheckCircle, AlertCircle, Upload, Cpu, Ear, Gauge, Palette, Shield, Brain, Wrench, Play, Link2 } from "lucide-react";
 import { SERVER_ORIGIN, gmailRedirectUri, openExternal } from "../../lib/platform";
 import { useJarvisStore } from "../../stores/jarvisStore";
+import { UpdateSection } from "../Update/Update";
 import { ProvidersTab } from "./ProvidersTab";
 import { PerfTab } from "./PerfTab";
 import { ThemeTab } from "./ThemeTab";
@@ -248,6 +249,8 @@ export function SettingsPanel() {
 
                       {/* Micro et reconnaissance vocale */}
                       <VoiceInputSection />
+
+                      <UpdateSection />
                     </>
                   )}
 
