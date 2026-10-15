@@ -77,6 +77,8 @@ jobs:
       - name: Build
         env:
           PYTHON: python
+          # Signature des artefacts de mise à jour (secret du dépôt, voir README).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: ./scripts/build-linux.sh
       - name: Panneau web autonome
         run: |
@@ -84,6 +86,7 @@ jobs:
           cp server/dist/jarvis_server dist-linux/jarvis-web-linux-x86_64
           cp client/src-tauri/target/release/bundle/deb/*.deb dist-linux/
           cp client/src-tauri/target/release/bundle/appimage/*.AppImage dist-linux/
+          cp client/src-tauri/target/release/bundle/appimage/*.AppImage.sig dist-linux/
           cp client/src-tauri/target/release/bundle/rpm/*.rpm dist-linux/
           cd dist-linux && sha256sum * > SHA256SUMS-linux.txt
       - uses: actions/upload-artifact@v4

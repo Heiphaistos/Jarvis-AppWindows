@@ -48,6 +48,14 @@ Write-Host "[BUILD] [OK] jarvis_server.exe -> $ResDir" -ForegroundColor Green
 # Step 5: Tauri build (installeur NSIS ; le serveur est une ressource du bundle)
 Write-Host "[BUILD] Tauri build release..." -ForegroundColor Cyan
 Set-Location $ClientDir
+# Mises à jour : signature minisign (clé privée hors dépôt, jamais committée).
+if (-not $env:TAURI_SIGNING_PRIVATE_KEY -and -not $env:TAURI_SIGNING_PRIVATE_KEY_PATH) {
+    $env:TAURI_SIGNING_PRIVATE_KEY_PATH = 'D:\MDP\jarvis-updater.key'
+}
+if (-not $env:TAURI_SIGNING_PRIVATE_KEY -and -not (Test-Path $env:TAURI_SIGNING_PRIVATE_KEY_PATH)) {
+    Write-Host "[ERREUR] Clé de signature introuvable : $env:TAURI_SIGNING_PRIVATE_KEY_PATH" -ForegroundColor Red
+    exit 1
+}
 npx tauri build
 
 if ($LASTEXITCODE -ne 0) {
@@ -57,4 +65,6 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "[BUILD] [OK] Build termine!" -ForegroundColor Green
 Write-Host ("[BUILD] Installeur: " + $ClientDir + "\src-tauri\target\release\bundle") -ForegroundColor Cyan
+python "$Root\scripts\make-latest-json.py"
+Write-Host "[BUILD] Release : téléverser JARVIS_X.Y.Z_x64-setup.exe, son .sig et latest.json (dossier bundle\nsis) sur la release GitHub vX.Y.Z" -ForegroundColor Cyan
 Write-Host "[BUILD] Panneau web (sans fenetre native) : jarvis_server.exe --web" -ForegroundColor Cyan
