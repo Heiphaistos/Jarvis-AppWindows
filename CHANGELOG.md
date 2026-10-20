@@ -1,5 +1,9 @@
 # Journal des modifications
 
+## 5.7.0
+
+- Securite : vitest 5 (corrige tinypool, execution de code via pollution de prototype), actions GitHub epinglees par SHA.
+
 ## 5.6.0
 
 - Mise à jour automatique (plugin Tauri updater) : vérification au démarrage, dialogue de confirmation en français avec version et notes, progression, installation silencieuse signée (minisign) puis relance.
